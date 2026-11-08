@@ -35,7 +35,7 @@ is never replaced by rendered HTML.
 For named files, local text awaiting acknowledgment also has a bounded recovery
 draft in VS Code's workspace storage. A recovered draft is offered explicitly on
 reopening; it never silently replaces a file changed elsewhere. Applied drafts
-are removed. Documents beyond 500,000 characters use the ordinary text editor.
+are removed. Documents beyond 1,000,000 characters use the ordinary text editor.
 This release allows one mathematical editor per file; ordinary text views can
 still share its document. This keeps draft recovery owned by a single editing view.
 

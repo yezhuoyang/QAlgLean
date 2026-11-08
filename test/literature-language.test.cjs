@@ -27,7 +27,7 @@ algorithm try_factor(N : Nat) -> Nat {
 }`;
   const document = parseDocument(source);
   assert.deepEqual(document.diagnostics, []);
-  assert.equal(document.parserVersion, '0.3');
+  assert.equal(document.parserVersion, '0.4');
   assert.equal(document.program.classicals.length, 2);
   assert.ok(document.program.classicals.every(item => item.opaque && item.body.length === 0));
   const algorithm = document.program.algorithms[0];
@@ -120,7 +120,7 @@ test('malformed control flow and misplaced obligations have useful diagnostics',
     ['let x : Qubit := $0$', /Use allocate/],
     ['allocate x : Nat', /allocate requires Qubit/],
     ['controlled(q) discard q', /Unknown quantum register|Unsupported program/],
-    ['let x : Nat[3] := $0$', /Expected Qubit/],
+    ['let x : Alien[3] := $0$', /Expected Qubit/],
   ];
   for (const [body, pattern] of cases) {
     const document = parse(body);

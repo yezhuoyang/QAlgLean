@@ -40,7 +40,11 @@ Use `$` to open the notation palette, or `\` for completions within a mathematic
 
 Named operators retain their names in the syntax tree. They are not automatically assigned a definition or an axiom. Mathematical fonts and accents also remain explicit nodes. `\text{...}` accepts short ASCII labels such as `\text{otherwise}`; mathematical expressions belong outside the label.
 
-Use explicit `\ket`, `\bra`, `\braket`, and `\ketbra` when the intended Dirac constructor matters. Raw angle/bar combinations retain their delimiters and separators; they are not a substitute for typed elaboration. Similarly, `\mid` retains the written separator without deciding whether it denotes conditioning, divisibility, or a set predicate.
+Use explicit `\ket`, `\bra`, `\braket`, and `\ketbra` when the intended Dirac constructor matters. The state labels `\ket{+}` and `\ket{-}` are supported, including in bras and inner/outer products. Raw angle/bar combinations retain their delimiters and separators; they are not a substitute for typed elaboration. Similarly, `\mid` retains the written separator without deciding whether it denotes conditioning, divisibility, or a set predicate.
+
+Multi-letter names remain atomic inside `\operatorname{...}`. Escape literal
+underscores, for example `\operatorname{table\_value}`; arbitrary TeX commands
+inside operator names are not accepted.
 
 ### Matrices, cases, and aligned statements
 

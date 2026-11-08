@@ -20,6 +20,7 @@ interface Group { kind: string; name: string; sections: Section[] }
 const kindNames: Record<string, string> = {
   parameter: 'Parameters', assumption: 'Assumptions', state: 'Quantum states',
   oracle: 'Oracle interface', classical: 'Classical interface', algorithm: 'Algorithm', spec: 'Specification', proof: 'Proof',
+  definition: 'Definition', equation: 'Equation', map: 'Wire map', import: 'Import', configuration: 'Configuration',
 };
 
 /** All source content crosses this escaping boundary before entering HTML. */
@@ -32,15 +33,15 @@ export function escapeHtml(value: unknown): string {
 /** Render the bounded presentation language; macro definitions are not allowed. */
 export function renderMath(source: string, displayMode = true): string {
   const forbidden = /\\(?:def|gdef|edef|xdef|let|futurelet|global|long|outer|newcommand|renewcommand|providecommand|newenvironment|renewenvironment|catcode|csname|endcsname|input|include|write|openout|read|htmlClass|htmlId|htmlStyle|htmlData)\b/;
-  if (source.length > 20_000 || forbidden.test(source)) {
-    return `<span class="math-error" role="note">${escapeHtml(source.length > 20_000
+  if (source.length > 32_768 || forbidden.test(source)) {
+    return `<span class="math-error" role="note">${escapeHtml(source.length > 32_768
       ? 'This expression exceeds the preview limit.'
       : 'User-defined TeX commands are not supported. Use the QParam notation library.')}</span>`;
   }
   try {
     return katex.renderToString(toMathLatex(source), {
       displayMode, output: 'htmlAndMathml', throwOnError: true,
-      trust: false, strict: 'error', maxExpand: 500, maxSize: 12,
+      trust: false, strict: 'error', maxExpand: 10_000, maxSize: 12,
       macros: { ...mathMacros },
     });
   } catch (error) {
@@ -82,7 +83,7 @@ function groupsFor(sections: Section[]): Group[] {
 }
 
 function renderCode(source: string): string {
-  const tokens = /(\/\/[^\r\n]*|\$[^$]*\$|\b(?:oracle|classical|algorithm|measure|return|repeat|in|let|var|set|if|else|while|allocate|discard|assert|invariant|controlled|adjoint|call)\b|\b(?:H|X|Y|Z|S|T|CX|CZ|CCX|SWAP|Phase|Rz|Ry|Rx|reset)\b|\b\d+\b|\b(?:Qubit|Nat|Int|Real|Complex|Bool|Bit|Math)\b)/g;
+  const tokens = /(\/\/[^\r\n]*|\$[^$]*\$|\b(?:import|define|equation|map|configuration|capacity|bind|given|assumes|outcomes|none|resource|reverse|when|parallel|atomic|div|oracle|classical|algorithm|measure|return|repeat|in|let|var|set|if|else|while|allocate|discard|assert|invariant|controlled|adjoint|call)\b|\b(?:H|X|Y|Z|S|T|CX|CZ|CCX|SWAP|Phase|RzDyadic|Rz|Ry|Rx|reset)\b|\b\d+\b|\b(?:Qubit|Nat|Int|Real|Complex|Bool|Bit|Math)\b)/g;
   let last = 0;
   let html = '';
   for (const match of source.matchAll(tokens)) {
@@ -91,7 +92,7 @@ function renderCode(source: string): string {
     if (token.startsWith('$')) html += `<span class="code-math">${renderMath(token.slice(1, -1), false)}</span>`;
     else {
       const kind = /^\/\//.test(token) ? 'comment' : /^\d/.test(token) ? 'number'
-        : /^(H|X|Y|Z|S|T|CX|CZ|CCX|SWAP|Phase|Rz|Ry|Rx|reset)$/.test(token) ? 'gate'
+        : /^(H|X|Y|Z|S|T|CX|CZ|CCX|SWAP|Phase|RzDyadic|Rz|Ry|Rx|reset)$/.test(token) ? 'gate'
         : /^(Qubit|Nat|Int|Real|Complex|Bool|Bit|Math)$/.test(token) ? 'type' : 'keyword';
       html += `<span class="token-${kind}">${escapeHtml(token)}</span>`;
     }
@@ -113,18 +114,19 @@ function renderItem(item: Item, section: Section): string {
   if (item.kind === 'admit') {
     return `<div class="assumption-note"><span class="assumption-symbol" aria-hidden="true">!</span><div><span class="item-caption">Open proof obligation</span><p>${escapeHtml(item.text || 'This step is explicitly admitted.')}</p></div>${sourceButton(item.line, true)}</div>`;
   }
-  const clause = ['requires', 'ensures', 'costs', 'probability'].includes(item.kind);
-  const label = clause ? item.kind : item.label || section.name;
+  const clause = ['requires', 'assumes', 'ensures', 'outcomes', 'resource', 'bind', 'costs', 'probability'].includes(item.kind);
+  const label = item.kind === 'resource' ? `resource ${item.label}` : clause ? item.kind : item.label || section.name;
   const status = section.kind === 'assumption' ? '<span class="status-tag assumed">Assumed</span>'
     : section.kind === 'proof' && hasMath ? '<span class="status-tag open">Open obligation</span>' : '';
   return `<div class="expression${clause ? ` clause clause-${escapeHtml(item.kind)}` : ''}" data-line="${item.line}">
     <div class="expression-heading"><span class="${clause ? 'clause-label' : 'expression-label'}">${escapeHtml(label)}</span>${status}<span class="expression-actions">${hasMath ? copyButton(item.math!) : ''}${sourceButton(item.line, true)}</span></div>
     ${hasMath ? `<div class="equation">${renderMath(item.math!)}</div>` : `<p class="item-text">${escapeHtml(item.text ?? '')}</p>`}
+    ${item.condition ? `<div class="condition"><span class="clause-label">given</span><div class="equation">${renderMath(item.condition.source)}</div></div>` : ''}
   </div>`;
 }
 
 function renderGroup(group: Group, index: number): string {
-  const items = group.sections.flatMap(section => ['algorithm', 'oracle', 'classical'].includes(section.kind)
+  const items = group.sections.flatMap(section => ['algorithm', 'oracle', 'classical', 'definition', 'equation', 'map', 'import', 'configuration'].includes(section.kind)
     ? programLines(section.source).map(({ source, line: lineIndex }) => {
       const line = section.line + lineIndex;
       return `<div class="program-line" data-line="${line}"><button class="line-number" data-action="reveal" data-line="${line}" aria-label="View source, line ${line + 1}">${line + 1}</button><code>${renderCode(source)}</code></div>`;

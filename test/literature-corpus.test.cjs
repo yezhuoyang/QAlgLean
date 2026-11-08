@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { parseDocument } = require('../dist/language/document');
+const { parseProject } = require('../dist/language/project');
 const { parseMath, toMathLatex } = require('../dist/language/math');
 const { mathSpans, programLines } = require('../dist/editor/spans');
 const { renderDocument, renderMath } = require('../dist/preview/render');
@@ -18,7 +19,7 @@ test('every gallery program has mathematical ASTs, rendering and mathematical La
   let formulas = 0, algorithms = 0, assertions = 0, interfaces = 0;
   for (const file of files) {
     const source = read(file);
-    const doc = parseDocument(source);
+    const doc = parseProject(file, read).document;
     assert.deepEqual(doc.diagnostics, [], file);
     assert.equal('verified' in doc, false, file);
     const tex = exportLatex(doc);

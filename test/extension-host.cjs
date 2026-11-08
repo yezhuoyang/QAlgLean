@@ -17,8 +17,8 @@ exports.run = async () => {
   assert.ok(gallery.some(e => e.file === 'literature/regev-lattice-sampling.qp'), 'advanced factoring in gallery');
   assert.equal(new Set(gallery.map(e => e.file)).size, gallery.length, 'one gallery item per source');
   for (const example of gallery) {
-    const data = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(extension.extensionUri, 'examples', example.file));
-    assert.deepEqual(api.parseDocument(Buffer.from(data).toString('utf8')).diagnostics, [], example.file);
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.joinPath(extension.extensionUri, 'examples', example.file));
+    assert.deepEqual(api.parseTextDocument(doc).diagnostics, [], example.file);
   }
   const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(extension.extensionUri, 'examples/bell.qp'));
   const document = await vscode.workspace.openTextDocument({ language: 'qparam', content: Buffer.from(bytes).toString('utf8') });
@@ -71,6 +71,32 @@ exports.run = async () => {
   await vscode.commands.executeCommand('vscode.openWith', fixture, 'default');
   await waitFor(() => vscode.window.activeTextEditor?.document.uri.toString() === fixture.toString(), 'ordinary source editor');
   assert.ok(vscode.window.activeTextEditor.document.getText().includes('$\\ket{1}$'), 'source and mathematical views share text');
+
+  // Real imports, including unsaved library changes, reach host and webview contexts.
+  const library = vscode.Uri.joinPath(extension.extensionUri, '.vscode-test/module-library.qp');
+  const imported = vscode.Uri.joinPath(extension.extensionUri, '.vscode-test/module-main.qp');
+  const libraryText = 'qparam Library\nalgorithm prepare(q : Qubit[]) {\n  H(q[0])\n}\n';
+  await vscode.workspace.fs.writeFile(library, Buffer.from(libraryText));
+  await vscode.workspace.fs.writeFile(imported, Buffer.from('qparam Main\nimport "module-library.qp"\nalgorithm run(q : Qubit[]) {\n  call prepare(q)\n}\n'));
+  await vscode.commands.executeCommand('vscode.open', imported);
+  await waitFor(() => api.getMathEditorDocuments().includes(imported.toString()), 'importing document opens in mathematical editor');
+  const importedDoc = await vscode.workspace.openTextDocument(imported);
+  const libraryDoc = await vscode.workspace.openTextDocument(library);
+  assert.deepEqual(api.parseTextDocument(importedDoc).diagnostics, [], 'actual QP dependency resolves');
+  const project = api.getEditorProject(importedDoc);
+  assert.equal(project.sources['.vscode-test/module-library.qp'], libraryText, 'webview receives exact resolved dependency source');
+  const edit = new vscode.WorkspaceEdit();
+  const parameterOffset = libraryDoc.getText().indexOf('q : Qubit[]') + 'q : Qubit[]'.length;
+  edit.insert(library, libraryDoc.positionAt(parameterOffset), ', n : Nat');
+  await vscode.workspace.applyEdit(edit);
+  assert.equal(libraryDoc.isDirty, true);
+  await waitFor(() => (api.diagnostics.get(imported) || []).some(d => /requires 2 argument/.test(d.message)), 'unsaved dependency arity updates importing diagnostics');
+  assert.match(api.getEditorProject(importedDoc).sources['.vscode-test/module-library.qp'], /n : Nat/, 'webview context sees unsaved dependency buffer');
+  const restore = new vscode.WorkspaceEdit();
+  restore.replace(library, new vscode.Range(libraryDoc.positionAt(0), libraryDoc.positionAt(libraryDoc.getText().length)), libraryText);
+  await vscode.workspace.applyEdit(restore);
+  await libraryDoc.save();
+  await waitFor(() => (api.diagnostics.get(imported) || []).length === 0, 'corrected dependency clears importing diagnostics');
   console.log('QPARAM_EXTENSION_TESTS_PASSED');
   await vscode.commands.executeCommand('workbench.action.closeAllEditors');
 };

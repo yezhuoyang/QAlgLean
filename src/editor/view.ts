@@ -1,5 +1,8 @@
 import { escapeHtml } from '../preview/render';
 
+/** A bounded, inert snapshot of the dependency sources available to this editor. */
+export interface EditorProject { entry: string; sources: Record<string, string> }
+
 export interface EditorOptions {
   source: string;
   version: number;
@@ -10,11 +13,12 @@ export interface EditorOptions {
   scriptUri: string;
   sourceName: string;
   recovered?: { source: string; base: string };
+  project?: EditorProject;
 }
 
 /** Only local assets run; document text is inert JSON, never executable HTML. */
 export function renderEditor(options: EditorOptions): string {
-  const bootstrap = JSON.stringify({ source: options.source, version: options.version, ...(options.recovered ? { recovered: options.recovered } : {}) })
+  const bootstrap = JSON.stringify({ source: options.source, version: options.version, ...(options.recovered ? { recovered: options.recovered } : {}), ...(options.project ? { project: options.project } : {}) })
     .replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
   const csp = `default-src 'none'; img-src ${options.cspSource} data:; font-src ${options.cspSource}; style-src ${options.cspSource} 'unsafe-inline'; script-src 'nonce-${options.nonce}';`;
   return `<!DOCTYPE html>

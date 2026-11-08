@@ -73,6 +73,14 @@ corpus. Run `npm run check:literature` for reproducible syntax/render/export cov
 
 ## What complete mathematical support requires
 
+The [FormalRV Gidney corpus](literature/gidney.md) adds all five selected authored
+entry points: GE2021, Gidney2025, their two Fixed wrappers, and FixedLanes. Its
+eight shared modules retain 106 program/gadget bodies, 560 operations, 104
+contracts and 284 definition equations. The source snapshot and generated
+coverage manifest make this bounded claim reproducible. Generated fault-tolerant
+schedules, machine-point resource results and Lean proofs are outside this
+transcription; absent source contracts remain absent.
+
 No finite gallery establishes support for every algorithm or TeX macro. The
 [notation reference](math-support.md) states the supported constructs. Named
 operators allow domain vocabulary without pretending to know its meaning.

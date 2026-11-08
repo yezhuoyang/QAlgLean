@@ -2,7 +2,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
-const { parseDocument } = require('../dist/language/document');
+const { parseProject } = require('../dist/language/project');
 const { renderDocument } = require('../dist/preview/render');
 const { renderEditor } = require('../dist/editor/view');
 const root = path.resolve(__dirname, '..');
@@ -12,16 +12,23 @@ http.createServer((req, res) => {
   if (url.pathname === '/favicon.ico') { res.writeHead(204); return res.end(); }
   if (url.pathname === '/' || url.pathname === '/editor') {
     const example = url.searchParams.get('example') || 'bell';
-    const requested = /^(?:literature\/)?[a-z0-9-]+$/.test(example) ? `${example}.qp` : 'bell.qp';
+    const requested = /^(?:(?:literature|formalrv)\/)?[a-z0-9-]+$/.test(example) ? `${example}.qp` : 'bell.qp';
     const file = fs.existsSync(path.join(root, 'examples', requested)) ? requested : 'bell.qp';
     const source = fs.readFileSync(path.join(root, 'examples', file), 'utf8');
+    const sources = {};
+    const project = parseProject(file, relative => {
+      const text = fs.readFileSync(path.join(root, 'examples', relative), 'utf8');
+      sources[relative] = text;
+      return text;
+    });
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     if (url.pathname === '/editor') return res.end(renderEditor({
       source: source.replace(/\r\n/g, '\n'), version: 1, sourceName: file,
+      project: { entry: file, sources },
       katexCssUri: '/media/katex/katex.min.css', styleUri: '/media/editor.css', scriptUri: '/media/editor.js',
       cspSource: "'self'", nonce: 'qparam-local-editor'
     }));
-    return res.end(renderDocument(parseDocument(source), {
+    return res.end(renderDocument(project.document, {
       katexCssUri: '/media/katex/katex.min.css', styleUri: '/media/preview.css', scriptUri: '/media/preview.js',
       cspSource: "'self'", nonce: 'qparam-local-visual-preview', sourceName: file
     }));

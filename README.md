@@ -89,6 +89,7 @@ adjoint operations, measurement, and explicitly declared external oracles. See t
 | [Semiclassical QFT](examples/literature/semiclassical-qft.qp), [phase estimation](examples/literature/quantum-phase-estimation.qp) | Measurement feedback, controlled powers, intermediate states and output distributions |
 | [QSearch](examples/literature/amplitude-search.qp), [amplitude estimation](examples/literature/amplitude-estimation.qp) | Randomized retries, controlled Grover iterate, probability and expected-query assertions |
 | [Shor factoring](examples/literature/shor-factoring.qp), [Regev factoring](examples/literature/regev-lattice-sampling.qp) | Quantum sampling and classical reductions, with explicit arithmetic/lattice interfaces |
+| [Gidney–Ekerå 2021](examples/formalrv/ge2021.qp), [Gidney 2025](examples/formalrv/gidney2025.qp), [fixed lanes](examples/formalrv/gidney2025-fixed-lanes.qp) | FormalRV circuit bodies and assertions: windowed arithmetic, measured uncomputation, phase gradients, residues and lane orchestration |
 | [Product formulas](examples/literature/hamiltonian-product-formulas.qp), [Taylor LCU](examples/literature/lcu-taylor.qp) | Simulation schedules, unary preparation, controlled selection and oblivious amplification |
 | [Block product](examples/literature/lcu-block-product.qp), [block sum](examples/literature/lcu-block-sum.qp) | Composition programs and projected-operator error assertions |
 | [Qubitization](examples/literature/qubitization-walk.qp), [QSVT](examples/literature/qsvt-phase-sequence.qp) | Walk reflections, Chebyshev transforms, odd/even phase sequences and real-part wrapper |
@@ -98,8 +99,8 @@ These examples exercise a defined, extensible mathematical grammar. They are **n
 complete implementations or verifications of every algorithm family**. The
 [coverage guide](docs/algorithm-coverage.md) identifies the implementation and proof
 gaps. The [literature guide](docs/literature/README.md) maps programs to paper versions,
-equations, access models and omissions. **23 documents, 45 algorithm bodies, and
-539 mathematical spans** currently pass the syntax/render/export corpus check.
+equations, access models and omissions. **31 documents, 151 algorithm bodies, and
+2,959 mathematical spans** currently pass the syntax/render/export corpus check.
 
 For example, [amplitude estimation](examples/literature/amplitude-estimation.qp)
 exposes the controlled iterate and its error claim:
@@ -139,6 +140,38 @@ explicit classical interfaces; their implementations and the assertions are
 not checked by this frontend. The Chen program likewise records the withdrawn
 paper's disputed Step 9 as an open obligation, not a detected or repaired proof.
 
+## Gidney programs and coherent assertions
+
+The [Gidney corpus](docs/literature/gidney.md) includes **all five selected FormalRV
+entry points**, including the [GE2021Fixed](examples/formalrv/ge2021-fixed.qp) and
+[Gidney2025Fixed](examples/formalrv/gidney2025-fixed.qp) configurations. Its eight
+shared modules contain **106 program/gadget bodies, 560 operations, 104 source
+contracts, and 284 definition equations**. Imports reuse the arithmetic libraries.
+The [coverage manifest](examples/formalrv/coverage.json) records the source revision,
+hashes, locations and missing contracts; the generated files are ordinary editable QP.
+
+Even a small carry gadget has a coherent specification. For example,
+[`gidneyFirst`](examples/formalrv/measured-adder.qp) is presented as:
+
+$$
+\begin{array}{ll}
+\mathbf{algorithm}&\mathtt{gidneyFirst}(q,c)\\[3pt]
+ &\mathrm{CCX}(q_0,q_1,q_2);\quad\mathrm{CX}(q_2,q_3);\quad\mathrm{CX}(q_2,q_4)\\[8pt]
+\mathbf{bind}&b<d,\quad\alpha\\[3pt]
+\mathbf{requires}&b+5\le d\\[5pt]
+\mathbf{assumes}&\displaystyle\sum_{z<2^d}\alpha(z)|z\rangle_{q[0,d)}\\[8pt]
+\mathbf{ensures}&\displaystyle\sum_{z<2^d}\alpha(z)
+\left|z\bmod 2^b+2^b\operatorname{vFirst}\!\left(\left\lfloor z/2^b\right\rfloor\right)\right\rangle_{q[0,d)}
+\end{array}
+$$
+
+Here `b` and `d` abbreviate the source's `base` and `dim`; `vFirst` is defined in
+the same module. Larger contracts preserve strided register bands, arbitrary
+amplitudes, measurement-conditioned postconditions, recovery probabilities, and
+separate resource counters. **These are transcribed claims, not checked proofs.**
+Generated fault-tolerant schedules and machine-point estimates are outside this
+source-syntax corpus.
+
 ## Try it in VS Code
 
 You need Node.js 22 or newer and desktop VS Code 1.95 or newer.
@@ -148,11 +181,12 @@ git clone https://github.com/yezhuoyang/QAlgLean.git
 cd QAlgLean
 npm ci
 npm run package
-code --install-extension artifacts/qparam-studio-0.3.0.vsix
+code --install-extension artifacts/qparam-studio-0.4.0.vsix
 code examples/qft.qp
 ```
 
-Run **QParam: Open an Example** for an editable, unsaved copy from the gallery.
+Run **QParam: Open an Example** for the gallery. Single-file examples open as
+unsaved copies; examples with imports open their source file with its libraries.
 If an existing tab still uses the ordinary source editor, select **QParam: Open
 Mathematical Editor**, or **Reopen Editor With → QParam Mathematical Editor**.
 
@@ -180,6 +214,7 @@ reference. See [architecture and trust boundary](docs/architecture.md).
 ```sh
 npm test                # Parser, mathematical coverage, rendering, editing protocol
 npm run check:literature # All examples, source manifest, mathematical export
+npm run import:formalrv  # Regenerate Gidney modules from the pinned source snapshot
 npm run test:extension  # Real VS Code: opening .qp, saving, undo/redo, source view
 npm run package         # Installable VSIX with bundled math fonts and editor
 npm run preview         # /editor?example=qft for editor QA; / for reading view
@@ -191,6 +226,7 @@ npm run preview         # /editor?example=qft for editor QA; / for reading view
 | `src/editor/` | Mathematical editor, versioned text edits, completions, LaTeX exchange |
 | `src/preview/`, `media/` | Reading view, editor styles, bundled browser assets |
 | `src/extension.ts` | VS Code registration, diagnostics, gallery, commands |
+| `src/import/` | Strict FormalRV source transcription and coverage generation |
 | `syntaxes/`, `snippets/` | Ordinary text editor highlighting and snippets |
 | `examples/`, `test/` | Algorithm documents and regression coverage |
 

@@ -82,7 +82,9 @@ test('Nat arithmetic is structured, bounded, and rejects trailing tokens', () =>
   assert.equal(expression.left.operator, '-');
   assert.equal(expression.right.operator, '*');
   assert.equal(parseIndex('2^j^k').right.operator, '^');
-  for (const source of ['n++1', 'n.x', '', '-1', 'n 2', 'f(n)']) assert.throws(() => parseIndex(source), undefined, source);
+  assert.equal(parseIndex('-1').kind, 'negative');
+  assert.equal(parseIndex('f(n)').kind, 'index-call');
+  for (const source of ['n++1', 'n.x', '', '-', 'n 2', 'f(n,)']) assert.throws(() => parseIndex(source), undefined, source);
   assert.throws(() => parseIndex('('.repeat(100) + '1' + ')'.repeat(100)), /nesting/);
 });
 

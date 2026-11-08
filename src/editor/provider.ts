@@ -1,10 +1,44 @@
 import * as vscode from 'vscode';
 import { randomBytes } from 'node:crypto';
-import { renderEditor } from './view';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { EditorProject, renderEditor } from './view';
 import { documentLimit, EditResult, validateEdit } from './protocol';
 import { escapeHtml } from '../preview/render';
+import { parseDocument, QDocument } from '../language/document';
+import { parseProject } from '../language/project';
 
 interface RecoveryDraft { source: string; base: string }
+
+/** Resolve local QP dependencies with unsaved buffers taking precedence over disk. */
+export function readDocumentProject(document: vscode.TextDocument): { document: QDocument; project?: EditorProject; dependencies: string[] } {
+  if (document.uri.scheme !== 'file') return { document: parseDocument(document.getText()), dependencies: [] };
+  const root = vscode.workspace.getWorkspaceFolder(document.uri)?.uri.fsPath ?? path.dirname(document.uri.fsPath);
+  const entry = path.relative(root, document.uri.fsPath).replace(/\\/g, '/');
+  const sources: Record<string, string> = Object.create(null);
+  const dependencies = new Set<string>();
+  const canonical = (value: string) => process.platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value);
+  const inside = (target: string, boundary: string) => {
+    const relative = path.relative(canonical(boundary), canonical(target));
+    return relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative);
+  };
+  const open = new Map(vscode.workspace.textDocuments.filter(doc => doc.uri.scheme === 'file').map(doc => [canonical(doc.uri.fsPath), doc]));
+  const result = parseProject(entry, relative => {
+    const target = path.resolve(root, relative);
+    dependencies.add(vscode.Uri.file(target).toString());
+    if (!inside(target, root) || path.extname(target).toLowerCase() !== '.qp') throw new Error('Imports must name .qp sources inside this workspace or the entry file directory.');
+    if (relative !== entry) {
+      // Lexical containment alone does not prevent a dependency symlink escaping the project.
+      if (!inside(fs.realpathSync(target), fs.realpathSync(root))) throw new Error('The imported file resolves outside the project root.');
+    }
+    const buffer = relative === entry ? document : open.get(canonical(target));
+    if (!buffer && fs.statSync(target).size > 1_000_000) throw new Error('Imported source exceeds the 1,000,000-byte document limit.');
+    const source = (buffer ? buffer.getText() : fs.readFileSync(target, 'utf8')).replace(/\r\n/g, '\n');
+    sources[relative] = source;
+    return source;
+  });
+  return { document: result.document, project: { entry, sources }, dependencies: [...dependencies] };
+}
 
 /** VS Code owns the text, file lifecycle, dirty state, save and undo history. */
 export class MathEditorProvider implements vscode.CustomTextEditorProvider, vscode.Disposable {
@@ -95,15 +129,27 @@ export class MathEditorProvider implements vscode.CustomTextEditorProvider, vsco
       source: this.source(document), version: document.version, sourceName: document.uri.path.split('/').pop() || 'Untitled.qp',
       nonce: randomBytes(18).toString('base64'), cspSource: webview.cspSource,
       katexCssUri: asset('katex', 'katex.min.css'), styleUri: asset('editor.css'), scriptUri: asset('editor.js'),
-      recovered: this.getRecoveryDraft(document)
+      recovered: this.getRecoveryDraft(document), project: readDocumentProject(document).project
     };
     const tooLarge = editorOptions.source.length > documentLimit;
-    webview.html = tooLarge ? `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${editorOptions.nonce}'"></head><body style="color:var(--vscode-editor-foreground);background:var(--vscode-editor-background);font-family:var(--vscode-font-family)"><p>${escapeHtml(editorOptions.sourceName)} exceeds the mathematical editor's 500,000-character limit.</p><button id="source">Open Text Editor</button><script nonce="${editorOptions.nonce}">const api=acquireVsCodeApi();document.getElementById('source').onclick=()=>api.postMessage({type:'source'});</script></body></html>` : renderEditor(editorOptions);
-    const sync = () => webview.postMessage({ type: 'document', source: this.source(document), version: document.version });
+    webview.html = tooLarge ? `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${editorOptions.nonce}'"></head><body style="color:var(--vscode-editor-foreground);background:var(--vscode-editor-background);font-family:var(--vscode-font-family)"><p>${escapeHtml(editorOptions.sourceName)} exceeds the mathematical editor's ${documentLimit.toLocaleString('en-US')}-character limit.</p><button id="source">Open Text Editor</button><script nonce="${editorOptions.nonce}">const api=acquireVsCodeApi();document.getElementById('source').onclick=()=>api.postMessage({type:'source'});</script></body></html>` : renderEditor(editorOptions);
+    let dependencies = new Set<string>();
+    const sync = () => {
+      const result = readDocumentProject(document);
+      dependencies = new Set(result.dependencies);
+      return webview.postMessage({ type: 'document', source: this.source(document), version: document.version, project: result.project });
+    };
     const disposables: vscode.Disposable[] = [];
     disposables.push(vscode.workspace.onDidChangeTextDocument(event => {
-      if (event.document.uri.toString() === document.uri.toString()) { void sync(); void this.clearAppliedDraft(document); }
+      if (event.document.uri.toString() === document.uri.toString() || dependencies.has(event.document.uri.toString())) void sync();
+      if (event.document.uri.toString() === document.uri.toString()) void this.clearAppliedDraft(document);
     }));
+    disposables.push(vscode.workspace.onDidCloseTextDocument(closed => {
+      if (closed.uri.toString() !== document.uri.toString() && dependencies.has(closed.uri.toString())) void sync();
+    }));
+    const watcher = vscode.workspace.createFileSystemWatcher('**/*.qp');
+    const dependencyChanged = (uri: vscode.Uri) => { if (dependencies.has(uri.toString())) void sync(); };
+    disposables.push(watcher, watcher.onDidChange(dependencyChanged), watcher.onDidCreate(dependencyChanged), watcher.onDidDelete(dependencyChanged));
     disposables.push(panel.onDidChangeViewState(event => {
       if (event.webviewPanel.active) this.active = document;
       else if (this.active === document) this.active = undefined;

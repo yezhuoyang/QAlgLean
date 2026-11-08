@@ -28,3 +28,12 @@ test('UTF-16 ranges preserve supplementary mathematical characters', () => {
   assert.ok(validateEdit(text, 7, edit));
   assert.equal(changedSource(text, edit.changes), 'state psi := $\\psi$');
 });
+
+test('the complete Gidney module can be edited within the bounded frontend limit', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const source = fs.readFileSync(path.join(__dirname, '../examples/formalrv/gidney2025.qp'), 'utf8');
+  const edit = request([{ from: source.length, to: source.length, text: '\n' }]);
+  assert.ok(validateEdit(source, 7, edit), 'the source-faithful module fits the editor, not only the batch parser');
+  assert.equal(validateEdit('x'.repeat(documentLimit), 7, request([{ from: documentLimit, to: documentLimit, text: 'x' }])), undefined);
+});

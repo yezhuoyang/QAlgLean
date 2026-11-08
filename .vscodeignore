@@ -9,11 +9,10 @@ test/**
 scripts/**
 output/**
 artifacts/**
-dist/**/*.map
-dist/language/**
-dist/preview/**
-dist/editor/**
+dist/**
+!dist/extension.js
 tsconfig.json
 package-lock.json
 .gitignore
+.gitattributes
 .vscodeignore

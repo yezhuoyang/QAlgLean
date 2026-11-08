@@ -4,7 +4,8 @@ import { parseDocument, QDocument } from './language/document';
 import { renderDocument } from './preview/render';
 import { insideMath, notations } from './editor/notation';
 import { exportLatex, importLatex } from './editor/latex';
-import { MathEditorProvider } from './editor/provider';
+import { MathEditorProvider, readDocumentProject } from './editor/provider';
+import { documentLimit } from './editor/protocol';
 
 /** The extension provides syntax services and a paper view, never a proof verdict. */
 export function activate(context: vscode.ExtensionContext) {
@@ -13,6 +14,7 @@ export function activate(context: vscode.ExtensionContext) {
   let panel: vscode.WebviewPanel | undefined;
   let previewDocument: vscode.TextDocument | undefined;
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
+  const dependencies = new Map<string, Set<string>>();
   const mathEditors = new MathEditorProvider(context, doc => openPreview(doc));
   context.subscriptions.push(mathEditors, vscode.window.registerCustomEditorProvider(MathEditorProvider.viewType, mathEditors, {
     webviewOptions: { retainContextWhenHidden: true }, supportsMultipleEditorsPerDocument: false
@@ -23,12 +25,14 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(diagnostics, status, { dispose() { timers.forEach(clearTimeout); panel?.dispose(); } });
 
   function parse(doc: vscode.TextDocument): QDocument {
-    if (doc.getText().length > 500_000) {
+    if (doc.getText().length > documentLimit) {
       return { name: 'Document', title: 'Document size limit', description: '', sections: [], program: { algorithms: [], oracles: [], classicals: [] }, diagnostics: [
-        { line: 0, column: 0, length: 1, severity: 'error', message: 'The interactive frontend supports documents up to 500,000 characters.' }
+        { line: 0, column: 0, length: 1, severity: 'error', message: `The interactive frontend supports documents up to ${documentLimit.toLocaleString('en-US')} characters.` }
       ] };
     }
-    return parseDocument(doc.getText());
+    const result = readDocumentProject(doc);
+    dependencies.set(doc.uri.toString(), new Set(result.dependencies));
+    return result.document;
   }
 
   function update(doc: vscode.TextDocument) {
@@ -89,7 +93,7 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   async function getExamples() {
-    const result: (vscode.QuickPickItem & { file: string })[] = [];
+    const result: (vscode.QuickPickItem & { file: string; hasImports: boolean })[] = [];
     async function visit(relative: string) {
       const directory = vscode.Uri.joinPath(context.extensionUri, 'examples', relative);
       for (const [name, kind] of await vscode.workspace.fs.readDirectory(directory)) {
@@ -98,7 +102,7 @@ export function activate(context: vscode.ExtensionContext) {
         else if (kind === vscode.FileType.File && name.endsWith('.qp')) {
           const content = new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.joinPath(directory, name)));
           const doc = parseDocument(content);
-          result.push({ label: doc.title || doc.name, description: file, detail: doc.description, file });
+          result.push({ label: doc.title || doc.name, description: file, detail: doc.description, file, hasImports: !!doc.imports?.length });
         }
       }
     }
@@ -117,8 +121,9 @@ export function activate(context: vscode.ExtensionContext) {
         title: 'QParam examples and literature corpus', matchOnDescription: true, matchOnDetail: true
       });
       if (!selected) return;
-      const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(context.extensionUri, 'examples', selected.file));
-      const doc = await vscode.workspace.openTextDocument({ language: 'qparam', content: new TextDecoder().decode(bytes) });
+      const uri = vscode.Uri.joinPath(context.extensionUri, 'examples', selected.file);
+      const doc = selected.hasImports ? await vscode.workspace.openTextDocument(uri)
+        : await vscode.workspace.openTextDocument({ language: 'qparam', content: new TextDecoder().decode(await vscode.workspace.fs.readFile(uri)) });
       await vscode.commands.executeCommand('vscode.openWith', doc.uri, MathEditorProvider.viewType);
     }),
     vscode.commands.registerCommand('qparam.insertMath', async () => {
@@ -159,13 +164,20 @@ export function activate(context: vscode.ExtensionContext) {
       const previous = timers.get(key);
       if (previous) clearTimeout(previous);
       const delay = vscode.workspace.getConfiguration('qparam').get<number>('preview.updateDelay', 180);
-      timers.set(key, setTimeout(() => { timers.delete(key); update(event.document); }, delay));
+      timers.set(key, setTimeout(() => {
+        timers.delete(key);
+        // An unsaved library edit changes every open importing document's interface.
+        const changed = event.document.uri.toString();
+        vscode.workspace.textDocuments.filter(doc => doc.uri.toString() === changed || dependencies.get(doc.uri.toString())?.has(changed)).forEach(update);
+      }, delay));
     }),
     vscode.workspace.onDidCloseTextDocument(doc => {
       diagnostics.delete(doc.uri);
       const timer = timers.get(doc.uri.toString());
       if (timer) clearTimeout(timer);
       timers.delete(doc.uri.toString());
+      dependencies.delete(doc.uri.toString());
+      vscode.workspace.textDocuments.filter(open => dependencies.get(open.uri.toString())?.has(doc.uri.toString())).forEach(update);
     }),
     vscode.window.onDidChangeActiveTextEditor(editor => {
       if (editor?.document.languageId === 'qparam') {
@@ -219,9 +231,14 @@ export function activate(context: vscode.ExtensionContext) {
       }
     })
   );
+  const sourceWatcher = vscode.workspace.createFileSystemWatcher('**/*.qp');
+  const refreshImports = (uri: vscode.Uri) => {
+    vscode.workspace.textDocuments.filter(doc => dependencies.get(doc.uri.toString())?.has(uri.toString())).forEach(update);
+  };
+  context.subscriptions.push(sourceWatcher, sourceWatcher.onDidChange(refreshImports), sourceWatcher.onDidCreate(refreshImports), sourceWatcher.onDidDelete(refreshImports));
   vscode.workspace.textDocuments.forEach(update);
   // A small inspection surface for extension-host integration tests; no proof engine is implied.
-  return { parseDocument, diagnostics, getExamples, getPreviewDocument: () => previewDocument?.uri.toString(),
+  return { parseDocument, parseTextDocument: parse, getEditorProject: (doc: vscode.TextDocument) => readDocumentProject(doc).project, diagnostics, getExamples, getPreviewDocument: () => previewDocument?.uri.toString(),
     getMathEditorDocuments: () => mathEditors.documents,
     preserveMathDraft: (doc: vscode.TextDocument, value: unknown) => mathEditors.preserveDraft(doc, value),
     getMathDraft: (doc: vscode.TextDocument) => mathEditors.getRecoveryDraft(doc),

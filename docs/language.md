@@ -1,4 +1,4 @@
-# QP 0.3: mathematical documents and parametric programs
+# QP 0.4: mathematical documents and parametric programs
 
 A `.qp` file combines a parametric circuit with paper-style mathematics. Its
 mathematical regions use `$…$`; the VS Code mathematical editor renders those
@@ -45,7 +45,11 @@ or prove it.
 
 | Form | Purpose |
 |---|---|
-| `parameter n : Nat` | Document parameter; types are `Nat`, `Int`, `Real`, `Complex`, `Bool`, `Bit`, `Bit[n]`, `Math` |
+| `parameter n : Nat` | Document parameter; types are `Nat`, `Int`, `Real`, `Complex`, `Bool`, `Bit`, `Math`; classical arrays use `Nat[]`, `Bit[n]`, etc. |
+| `import "arithmetic.qp"` | Import actual QP declarations through a project reader |
+| `define width(n : Math) := $n+1$` | Mathematical definition with an explicit argument signature |
+| `map shift(b : Nat)(i : Nat) := $b+i$` | Parametric quantum-wire placement map |
+| `configuration surface $d=31$` | Authored lowering configuration, without a checked machine interpretation |
 | `assume positive : $n>0$` | Explicit mathematical premise |
 | `state uniform := $...$` | Named mathematical expression, with no automatic state preparation |
 | `oracle U(q : Qubit[n])` | Opaque external circuit with an explicit signature |
@@ -54,7 +58,7 @@ or prove it.
 | `spec prepare { ... }` | Preconditions, postconditions, probability and cost obligations |
 | `proof prepare { ... }` | Goals, missing proofs and unresolved external references |
 
-Specification clauses are `requires`, `ensures`, `probability` and `costs`, each
+Specification clauses include `requires`, `assumes`, `ensures`, `probability` and `costs`, each
 followed by one mathematical region. Multiple clauses of a kind are permitted.
 `costs $Q=k$` records a claim; it does not count operations.
 
@@ -121,11 +125,17 @@ disjointness and dimensions are not checked.
 
 `q[j]` selects an element; `q[lo..hi]` selects a half-open slice. Loop ranges are
 also half-open: `repeat j in 0..n` means `0` through `n-1`. Structural arithmetic
-supports natural numerals, names, parentheses and `+ - * / ^`. Multiplication and
-division bind tighter than addition/subtraction; exponentiation is right
-associative. Division is intended as natural floor division. The parser neither
+supports natural numerals, names, parentheses, function calls, table access, unary
+minus and `+ - * / div % ^ >> <<`. Multiplication, division and remainder bind tighter
+than addition/subtraction; shifts bind below addition; exponentiation is right
+associative and binds tighter than unary minus. `div` and `/` denote floor division
+in this structural arithmetic. Use `div` when translating a source language's `//`:
+`//` starts a QP comment. Function names and arities are resolved against `define`
+signatures, with built-in two-argument `min` and `max`. The parser neither
 evaluates arithmetic nor proves validity of subtractions, bounds or dimensions.
-Reusing an active loop index is rejected. Arithmetic nesting is limited to 64.
+Reusing an active local or loop index is rejected. A loop may lexically shadow a
+document parameter; after the loop the document parameter is visible again.
+Arithmetic nesting and program control nesting are limited to 64.
 
 ```qp
 repeat j in 0..n {
@@ -140,6 +150,100 @@ Measurement introduces an immutable local result name, without probability
 semantics yet. The parser records this as `Bit`; register measurement width and
 dependent result typing remain work for an elaborator. An opaque primitive is
 a visible implementation boundary, never an automatically implemented algorithm.
+
+## Measured arithmetic and source contracts
+
+The Gidney corpus requires persistent classical records, wire placement, descending
+loops and contracts for coherent superpositions. These are explicit syntax:
+
+```qp
+map shift(b : Nat)(i : Nat) := $b+i$
+algorithm release(q : Qubit[], c : Bit[], n : Nat) {
+  capacity q $n$
+  capacity c $n$
+  reverse repeat j in 0..n {
+    H(q[j])
+    measure q[j] -> c[j]
+    when c[j] {
+      Z(q[j])
+    }
+  }
+}
+```
+
+Empty brackets in `Qubit[]` and `Bit[]` leave capacity unspecified. `capacity q
+$...$` and `capacity c $...$` preserve source footprints as mathematical clauses
+before all instructions. They do not allocate memory or establish bounds.
+`reverse repeat j in lo..hi` visits the same half-open range in descending order,
+from `hi-1` to `lo`. The direction is retained in the program tree.
+
+`measure q[j] -> c[k]` writes an existing `Bit` array slot. This is distinct from
+measurement into a fresh local result. Optional measurement bases are written
+`measure X q[j] -> c[k]`, `measure Y ...`, or `measure Z ...`; the default is Z.
+`when c[k] { ... }` preserves record-dependent control, while `when $...$ { ... }`
+admits mathematical guards such as parity over many recorded bits. The parser
+checks indexed record names and their declared `Bit` array shape. It does not
+establish record initialization, quantum typing, or the guard's meaning.
+
+`controlled(q[k]) { ... }` records a common quantum control for a block.
+`call release(q,c,n) @ shift(base)` preserves a placement-map application on the
+quantum wires. Classical record indices remain as authored; quantum placement
+does not also shift the record array. `RzDyadic(q[j], k)` retains FormalRV's
+dyadic-depth rotation primitive without silently replacing it with an arbitrary
+angle convention. Its semantics must be supplied by the future source bridge.
+
+`atomic { ... }`, `parallel { ... }` and `parallel repeat j in lo..hi { ... }`
+also have distinct syntax-tree nodes. They express scheduling intent; parsing
+does not prove disjointness, construct a schedule, or establish a depth bound.
+The current Gidney source bodies are translated without introducing these forms
+where the source has only sequential loops.
+
+```qp
+spec release {
+  bind $(\alpha,r)$
+  requires $n>0$
+  assumes $\sum_{z=0}^{2^{n}-1}\alpha(z)\ket{z}$
+  ensures $\ket{0}$ given $c_{0}=r$
+  outcomes $\Pr(c_{0}=r)=\abs{\alpha(r)}^{2}$
+  resource meas := $n$
+  resource toffoli := $0$
+}
+```
+
+This illustrates the contract syntax, not a theorem about `release`. `bind`
+records contract binders (`forall` is an alias); multiple names are grouped as
+`$(\alpha,r)$`. `requires` records a mathematical premise; `assumes` can record
+the input coherent state separately. An `ensures ... given ...` condition is
+attached to that postcondition in the tree and must not become an unconditional
+claim. `outcomes none` explicitly records no measurement outcomes. A named
+`resource counter := $expression$` preserves each authored counter independently;
+it is not a measured operation count or a verified resource bound.
+
+## Mathematical definitions and modules
+
+Definitions have an explicit signature, even when supplied as recursive equations:
+
+```qp
+define bit(x : Math, k : Math) := $\lfloor x/2^{k}\rfloor\bmod 2$
+define popCount(n : Math, x : Math)
+equation popCount(0, x) := $0$
+equation popCount(n+1, x) := $\operatorname{popCount}(n,x)+\operatorname{bit}(x,n)$
+```
+
+Equation patterns have structural arithmetic trees. Definition and equation
+arities are checked; mathematical argument types, recursive termination,
+exhaustiveness, and correspondence between the signature and formula are not.
+Source-translated mathematical functions use `Math` until that bridge is defined.
+Document parameters may use Unicode names, including `parameter α : Math`.
+
+`import "module.qp"` imports actual declarations, parameters, mathematical
+definitions and maps. Missing files, cycles, unsafe paths and invalid imported
+documents produce diagnostics. Imports are relative to their importing file and
+remain inside the project root; there is no network import or arbitrary code
+execution. The project reader bounds the dependency graph. The low-level
+`parseDocument` API requires resolved imported documents in declaration order;
+an import statement never makes unknown calls valid. Mathematical names inside
+`$...$` still have no general scope or type resolution.
 
 ## Classical control and mathematical assertions
 
@@ -222,7 +326,8 @@ or resource claims. These operations cannot carry gate modifiers syntactically.
 
 Each declaration or instruction occupies one logical line. A logical line can
 span physical lines inside `$…$`. A final semicolon is optional. `//` starts a
-comment outside mathematics and strings. Names match `[A-Za-z][A-Za-z0-9_]*`;
+comment outside mathematics and strings. Program names match `[A-Za-z][A-Za-z0-9_]*`;
+document parameter names also accept Unicode letters and digits.
 strings use JSON quotation and escapes. Indentation is free; follow example
 spacing in document and specification forms.
 
@@ -232,15 +337,20 @@ declaration = "title" string | "description" string
             | "parameter" name ":" classical-type
             | "assume" name ":" math | "state" name ":=" math
             | "oracle" signature | "classical" signature "->" classical-type
-            | algorithm | spec | proof ;
+            | "import" string | definition | equation | map
+            | "configuration" name math | algorithm | spec | proof ;
 signature   = name "(" [formal { "," formal }] ")" ;
 formal      = name ":" value-type ;
 scalar-type = "Nat" | "Int" | "Real" | "Complex" | "Bool" | "Math" ;
-classical-type = scalar-type | "Bit" [ "[" index "]" ] ;
-value-type  = classical-type | "Qubit" [ "[" index "]" ] ;
-algorithm   = "algorithm" signature [ "->" value-type ] "{" newline { instruction newline } "}" ;
-instruction = { modifier } (gate | "call" name) "(" [actuals] ")"
-            | "measure" register "->" name
+classical-type = (scalar-type | "Bit") [ "[" [index] "]" ] ;
+value-type  = classical-type | "Qubit" [ "[" [index] "]" ] ;
+definition  = "define" signature [ ":=" math ] ;
+equation    = "equation" name "(" [index { "," index }] ")" ":=" math ;
+map         = "map" signature "(" name ":" "Nat" ")" ":=" math ;
+algorithm   = "algorithm" signature [ "->" value-type ] "{" newline
+              { "capacity" name math newline } { instruction newline } "}" ;
+instruction = { modifier } (gate | "call" name) "(" [actuals] ")" [ "@" name "(" [index { "," index }] ")" ]
+            | "measure" ["X"|"Y"|"Z"] register "->" (name | record)
             | ("let" | "var") name ":" classical-type ":=" value
             | "set" name ":=" value
             | ("assert" | "invariant" | "return") math
@@ -249,17 +359,25 @@ instruction = { modifier } (gate | "call" name) "(" [actuals] ")"
             | "if" math "{" newline { instruction newline } "}"
               [ "else" "{" newline { instruction newline } "}" ]
             | "while" math "{" newline { instruction newline } "}"
-            | "repeat" name "in" index ".." index "{" newline
+            | "when" (math | record) "{" newline { instruction newline } "}"
+            | "controlled" "(" register { "," register } ")" "{" newline { instruction newline } "}"
+            | ("atomic" | "parallel") "{" newline { instruction newline } "}"
+            | ["reverse" | "parallel"] "repeat" name "in" index ".." index "{" newline
               { instruction newline } "}" ;
 value       = math | "call" name "(" [actuals] ")" ;
 modifier    = "adjoint" | "controlled" "(" register { "," register } ")" ;
 actuals     = actual { "," actual } ;
 actual      = register | index | math ;
 register    = name [ "[" index [ ".." index ] "]" ] ;
-index       = natural | name | "(" index ")" | index ("+"|"-"|"*"|"/"|"^") index ;
+record      = name "[" index "]" ;
+index       = natural | name | "(" index ")" | "-" index
+            | name "(" [index { "," index }] ")" | name "[" index "]"
+            | index ("+"|"-"|"*"|"/"|"div"|"%"|"^"|">>"|"<<") index ;
 math        = "$" expression "$" ;
 spec        = "spec" name "{" newline { clause newline } "}" ;
-clause      = ("requires" | "ensures" | "costs" | "probability") math ;
+clause      = ("bind"|"forall"|"requires"|"assumes"|"costs"|"probability") math
+            | "ensures" math [ "given" math ] | "outcomes" ("none" | math)
+            | "resource" name ":=" math ;
 proof       = "proof" name "{" newline { proof-item newline } "}" ;
 proof-item  = "goal" math | "admit" string | "by lean" string ;
 ```
@@ -267,7 +385,7 @@ proof-item  = "goal" math | "admit" string | "by lean" string ;
 The precedence rules above disambiguate `index`. There is exactly one initial
 header and at most one title and description. Parameter, assumption and state
 names cannot duplicate one another. Documents are limited to 1,000,000
-characters; the editor has a smaller interactive limit. Mathematical limits are
+characters; the mathematical editor uses the same source limit. Mathematical limits are
 specified in the [notation reference](math-support.md).
 
 ## LaTeX exchange and coverage

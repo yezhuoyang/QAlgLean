@@ -7,13 +7,17 @@ import { tags } from '@lezer/highlight';
 import { search, searchKeymap } from '@codemirror/search';
 import { renderMath } from '../preview/render';
 import { parseDocument } from '../language/document';
+import { parseProject } from '../language/project';
+import type { EditorProject } from './view';
+import { documentLimit } from './protocol';
 import { insideMath, notations } from './notation';
 import { difference, MathSpan, mathSpans, mergeUnrelated } from './spans';
 import { codeMirrorSnippet } from './snippets';
 
 declare function acquireVsCodeApi(): { postMessage(value: unknown): void; getState(): { raw?: boolean } | undefined; setState(state: unknown): void };
 const host = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : undefined;
-const initial = JSON.parse(document.getElementById('qparam-document')!.textContent!) as { source: string; version: number; recovered?: { source: string; base: string } };
+const initial = JSON.parse(document.getElementById('qparam-document')!.textContent!) as { source: string; version: number; recovered?: { source: string; base: string }; project?: EditorProject };
+let project = initial.project;
 const rawMode = StateEffect.define<boolean>();
 const fromHost = Annotation.define<boolean>();
 const forceRender = StateEffect.define<boolean>();
@@ -72,9 +76,9 @@ const formulas = StateField.define<DecorationSet>({
   provide: field => EditorView.decorations.from(field),
 });
 
-const keywords = new Set('qparam title description parameter assume state oracle classical algorithm spec proof requires ensures costs probability goal admit by lean repeat in measure call controlled adjoint let var set if else while return allocate discard assert invariant'.split(' '));
+const keywords = new Set('qparam title description parameter assume state oracle classical algorithm spec proof requires ensures costs probability goal admit by lean repeat reverse parallel atomic in measure call controlled adjoint let var set if else while return allocate discard assert invariant import define equation map configuration capacity bind forall assumes outcomes none resource given when div'.split(' '));
 const types = new Set('Qubit Nat Int Real Complex Bool Bit Math'.split(' '));
-const gates = new Set('H X Y Z S T CX CZ SWAP CCX Rx Ry Rz Phase reset'.split(' '));
+const gates = new Set('H X Y Z S T CX CZ SWAP CCX Rx Ry Rz RzDyadic Phase reset'.split(' '));
 const qparamLanguage = StreamLanguage.define({
   startState: () => ({ math: false }),
   token(stream, state) {
@@ -94,9 +98,9 @@ const qparamLanguage = StreamLanguage.define({
       return 'string';
     }
     if (stream.match(/\d+/)) return 'number';
-    const name = stream.match(/[A-Za-z_][A-Za-z_0-9]*/);
+    const name = stream.match(/[\p{L}_][\p{L}\p{N}_]*/u);
     if (name) { const word = (name as RegExpMatchArray)[0]; return keywords.has(word) ? 'keyword' : types.has(word) ? 'typeName' : gates.has(word) ? 'variableName.function' : 'variableName'; }
-    if (stream.match(/[:=+*<>!|-]+/)) return 'operator';
+    if (stream.match(/[:=+*/%^<>!|@-]+/)) return 'operator';
     stream.next();
     return null;
   },
@@ -165,7 +169,7 @@ function flush(): void {
   const current = view.state.doc.toString();
   const change = difference(base, current);
   if (change) {
-    if (current.length > 500_000) { showConflict(base, version, 'The editor limit is 500,000 characters. Your draft is preserved; copy it or shorten it before applying.'); return; }
+    if (current.length > documentLimit) { showConflict(base, version, `The editor limit is ${documentLimit.toLocaleString('en-US')} characters. Your draft is preserved; copy it or shorten it before applying.`); return; }
     if (!host) { base = current; version++; status.textContent = ''; flush(); return; }
     inFlight = { requestId: ++requestNumber, before: base, after: current };
     status.textContent = 'Syncing…';
@@ -182,7 +186,12 @@ function command(type: 'save' | 'undo' | 'redo' | 'source'): boolean {
 }
 
 function updateSyntax(): void {
-  const diagnostics = parseDocument(view.state.doc.toString()).diagnostics;
+  const source = view.state.doc.toString();
+  const diagnostics = (project ? parseProject(project.entry, path => {
+    if (path === project!.entry) return source;
+    if (!Object.hasOwn(project!.sources, path)) throw new Error('Dependency is unavailable in this editor snapshot; save the import in its project.');
+    return project!.sources[path];
+  }).document : parseDocument(source)).diagnostics;
   const syntax = document.getElementById('syntax-status')!;
   syntax.textContent = diagnostics.length ? `${diagnostics.length} syntax ${diagnostics.length === 1 ? 'issue' : 'issues'}` : 'Syntax parsed';
   syntax.classList.toggle('has-errors', diagnostics.some(diagnostic => diagnostic.severity === 'error'));
@@ -279,6 +288,11 @@ window.addEventListener('message', event => {
     return;
   }
   if (!message || typeof message.source !== 'string' || !Number.isSafeInteger(message.version)) return;
+  if (message.type === 'document' && message.version >= version) {
+    project = message.project && typeof message.project.entry === 'string' && message.project.sources && typeof message.project.sources === 'object' ? message.project : undefined;
+    clearTimeout(syntaxTimer);
+    syntaxTimer = setTimeout(updateSyntax, 180);
+  }
   const snapshot = { source: message.source.replace(/\r\n/g, '\n'), version: message.version as number };
   if (message.type === 'document') {
     if (snapshot.version < version) return;
@@ -307,7 +321,7 @@ window.addEventListener('message', event => {
 });
 window.addEventListener('blur', flush);
 setMode(view.state.field(rawField));
-if (initial.recovered && typeof initial.recovered.source === 'string' && initial.recovered.source.length <= 500_000 && initial.recovered.source !== base) {
+if (initial.recovered && typeof initial.recovered.source === 'string' && initial.recovered.source.length <= documentLimit && initial.recovered.source !== base) {
   replaceSource(initial.recovered.source.replace(/\r\n/g, '\n'));
   showConflict(base, version, 'Recovered a draft that was not fully synchronized. Review it before applying it to the file.');
 }

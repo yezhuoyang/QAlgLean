@@ -3,7 +3,7 @@ export interface SourceChange { from: number; to: number; text: string }
 export interface EditRequest { type: 'edit'; requestId: number; version: number; changes: SourceChange[] }
 export interface EditResult { type: 'edit-result'; requestId: number; accepted: boolean; source: string; version: number; reason?: string }
 
-export const documentLimit = 500_000;
+export const documentLimit = 1_000_000;
 
 /** Validate at the host boundary; untrusted webviews cannot address another file. */
 export function validateEdit(source: string, version: number, input: unknown): EditRequest | undefined {

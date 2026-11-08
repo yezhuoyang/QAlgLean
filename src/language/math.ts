@@ -78,15 +78,18 @@ function tokenize(source: string): Token[] {
       }
       if (['quad', 'qquad'].includes(name)) continue;
       if (name === 'begin' || name === 'end' || name === 'operatorname' || name === 'text') {
-        const argument = /^\s*\{([^{}\\]*)\}/.exec(source.slice(i));
+        const argument = (name === 'operatorname' ? /^\s*\{((?:[^{}\\]|\\_)*)\}/ : /^\s*\{([^{}\\]*)\}/).exec(source.slice(i));
         if (!argument) throw new MathSyntaxError(`\\${name} requires a plain braced argument without nested TeX commands.`, start, i - start);
+        if (name === 'operatorname' && argument[1].replace(/\\_/g, '').includes('_')) {
+          throw new MathSyntaxError('Escape an underscore in an operator name as \\_.', start, i - start);
+        }
         i += argument[0].length;
-        const value = argument[1];
+        const value = name === 'operatorname' ? argument[1].replace(/\\_/g, '_') : argument[1];
         if (name === 'begin' || name === 'end') {
           if (!mathEnvironments.has(value)) throw new MathSyntaxError(`Unsupported mathematical environment ${value}.`, start, i - start);
           tokens.push({ kind: 'symbol', value: `${name}:${value}`, start, end: i });
         } else {
-          if (!(name === 'operatorname' ? /^[A-Za-z][A-Za-z0-9 ]*$/ : /^[A-Za-z0-9 .,:;!?=+()\/-]*$/).test(value)) {
+          if (!(name === 'operatorname' ? /^[A-Za-z_][A-Za-z0-9_ ]*$/ : /^[A-Za-z0-9 .,:;!?=+()\/-]*$/).test(value)) {
             throw new MathSyntaxError(`\\${name} accepts plain ${name === 'operatorname' ? 'operator names' : 'ASCII labels'} only. Keep mathematical notation outside this label.`, start, i - start);
           }
           tokens.push({ kind: name === 'operatorname' ? 'operator' : 'text', value, start, end: i });
@@ -255,7 +258,7 @@ class Parser {
     }
     throw new MathSyntaxError('Expected a script value; use braces for a compound subscript or exponent.', token.start);
   }
-  private group(): MathNode {
+  private group(diracLabel = false): MathNode {
     const opening = this.take();
     const closings = closingDelimiters[opening.value];
     const elements: MathNode[] = [];
@@ -263,7 +266,12 @@ class Parser {
       if (opening.value !== 'set-open') throw new MathSyntaxError('Empty mathematical groups are not supported.', this.peek().start);
       return { kind: 'group', delimiter: 'set', elements, start: opening.start, end: this.take().end };
     }
-    elements.push(this.expression(0));
+    const next = this.tokens[this.cursor + 1];
+    const primitiveDirac = diracLabel || (opening.value === 'abs-open' && next?.value === 'angle-close') || (opening.value === 'angle-open' && next?.value === 'abs-close');
+    if (primitiveDirac && ['+', '-'].includes(this.peek().value) && closings.includes(next?.value)) {
+      const label = this.take();
+      elements.push({ kind: 'identifier', value: label.value, start: label.start, end: label.end });
+    } else elements.push(this.expression(0));
     while (this.peek().value === ',') { this.take(); elements.push(this.expression(0)); }
     const closing = this.peek();
     if (!closings.includes(closing.value)) throw new MathSyntaxError('Expected a matching mathematical delimiter.', closing.start);
@@ -275,9 +283,9 @@ class Parser {
     if (opening.value === 'norm-open') return { kind: 'norm', argument, start: opening.start, end: closing.end };
     return { ...argument, delimiter: ['{', '(', '['].includes(opening.value) ? opening.value + closing.value : opening.value.replace('-open', '') };
   }
-  private requiredGroup(): MathNode {
+  private requiredGroup(diracLabel = false): MathNode {
     if (this.peek().value !== '{') throw new MathSyntaxError('Expected a braced argument {…}.', this.peek().start);
-    return this.group();
+    return this.group(diracLabel);
   }
   private scripts(): { subscript?: MathNode; superscript?: MathNode } {
     const result: { subscript?: MathNode; superscript?: MathNode } = {};
@@ -345,14 +353,14 @@ class Parser {
         return { kind: 'fraction', numerator, denominator, start: token.start, end: denominator.end };
       }
       if (['braket', 'ip', 'ketbra', 'set', 'binom'].includes(token.value)) {
-        const left = this.requiredGroup();
-        const right = this.requiredGroup();
+        const left = this.requiredGroup(['braket', 'ip', 'ketbra'].includes(token.value));
+        const right = this.requiredGroup(['braket', 'ip', 'ketbra'].includes(token.value));
         const kind = token.value === 'ketbra' ? 'outer-product' : token.value === 'set' ? 'set-builder' : token.value === 'binom' ? 'binomial' : 'inner-product';
         return { kind, left, right, start: token.start, end: right.end };
       }
       if (['sqrt', 'ket', 'bra', 'norm', 'abs'].includes(token.value) || mathStyles.has(token.value) || mathAccents.has(token.value)) {
         const degree = token.value === 'sqrt' && this.peek().value === '[' ? this.group() : undefined;
-        const argument = this.requiredGroup();
+        const argument = this.requiredGroup(['ket', 'bra'].includes(token.value));
         const kind = token.value === 'sqrt' ? 'root' : token.value === 'ket' ? 'ket' : token.value === 'bra' ? 'bra' : token.value === 'norm' ? 'norm' : token.value === 'abs' ? 'absolute' : mathAccents.has(token.value) ? 'accent' : 'style';
         return { kind, argument, ...(kind === 'style' || kind === 'accent' ? { style: token.value } : {}), ...(degree ? { degree } : {}), start: token.start, end: argument.end };
       }

@@ -27,7 +27,7 @@ export function exportLatex(doc: QDocument): string {
   ];
   for (const section of doc.sections) {
     lines.push(`\\subsection*{${escapeLatex(section.kind)}: ${escapeLatex(section.name)}}`);
-    if (['algorithm', 'oracle', 'classical'].includes(section.kind)) {
+    if (['algorithm', 'oracle', 'classical', 'definition', 'equation', 'map', 'import', 'configuration'].includes(section.kind)) {
       for (const { source } of programLines(section.source)) {
         let cursor = 0;
         const parts: string[] = [];
@@ -45,6 +45,7 @@ export function exportLatex(doc: QDocument): string {
       if (item.label) lines.push(`\\noindent\\textbf{${escapeLatex(item.label)}}\\quad`);
       if (item.math) lines.push(`\\[${toMathLatex(item.math)}\\]`);
       else if (item.text) lines.push(`\\noindent\\texttt{${escapeLatex(item.text)}}\\par`);
+      if (item.condition) lines.push('\\noindent\\textbf{given}', `\\[${toMathLatex(item.condition.source)}\\]`);
     }
   }
   lines.push('\\end{document}', '');
