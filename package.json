@@ -1,0 +1,150 @@
+{
+  "name": "qparam-studio",
+  "displayName": "QParam Studio",
+  "description": "Write quantum algorithms as mathematics. A colorful language editor and live typeset research notebook for QParam.",
+  "version": "0.1.0",
+  "publisher": "yezhuoyang",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yezhuoyang/QAlgLean.git"
+  },
+  "engines": {
+    "vscode": "^1.95.0",
+    "node": ">=22"
+  },
+  "categories": [
+    "Programming Languages",
+    "Visualization",
+    "Education"
+  ],
+  "keywords": [
+    "quantum",
+    "qparam",
+    "latex",
+    "mathematics",
+    "research"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:qparam"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": {
+      "supported": true
+    }
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "qparam",
+        "aliases": [
+          "QParam",
+          "qp"
+        ],
+        "extensions": [
+          ".qp"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "qparam",
+        "scopeName": "source.qparam",
+        "path": "./syntaxes/qparam.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "qparam",
+        "path": "./snippets/qparam.json"
+      }
+    ],
+    "themes": [
+      {
+        "label": "QParam Midnight",
+        "uiTheme": "vs-dark",
+        "path": "./themes/qparam-midnight.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "qparam.openPreview",
+        "title": "QParam: Open Paper Preview",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "qparam.openExample",
+        "title": "QParam: Open an Example"
+      },
+      {
+        "command": "qparam.insertMath",
+        "title": "QParam: Insert Mathematical Notation"
+      },
+      {
+        "command": "qparam.exportLatex",
+        "title": "QParam: Export Paper to LaTeX"
+      },
+      {
+        "command": "qparam.importLatex",
+        "title": "QParam: Import QParam Block from LaTeX"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "qparam.openPreview",
+          "when": "editorLangId == qparam",
+          "group": "navigation"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "qparam.openPreview",
+        "key": "ctrl+k v",
+        "mac": "cmd+k v",
+        "when": "editorTextFocus && editorLangId == qparam"
+      }
+    ],
+    "configuration": {
+      "title": "QParam",
+      "properties": {
+        "qparam.preview.updateDelay": {
+          "type": "number",
+          "default": 180,
+          "minimum": 50,
+          "maximum": 2000,
+          "description": "Delay in milliseconds before updating syntax diagnostics and the paper preview after an edit."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "build": "npm run compile && node scripts/build.cjs",
+    "watch": "tsc -watch -p .",
+    "test": "npm run build && node --test test/*.test.cjs",
+    "package": "npm run build && node -e \"require('fs').mkdirSync('artifacts',{recursive:true})\" && vsce package --no-dependencies --out artifacts/qparam-studio-0.1.0.vsix",
+    "vscode:prepublish": "npm run build",
+    "preview": "npm run build && node scripts/preview.cjs",
+    "test:extension": "npm run build && node scripts/test-extension.cjs"
+  },
+  "dependencies": {
+    "katex": "^0.19.1"
+  },
+  "overrides": { "@vscode/vsce": { "minimatch": "^11.0.1" } },
+  "devDependencies": {
+    "@types/katex": "^0.16.7",
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.95.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^4.1.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.3"
+  }
+}

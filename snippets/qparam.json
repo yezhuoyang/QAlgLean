@@ -1,0 +1,74 @@
+{
+  "Bell research document": {
+    "prefix": "qp-bell",
+    "description": "A complete Bell-state research document with an explicit open proof",
+    "body": [
+      "qparam ${1:Bell};",
+      "title \"${2:A pair in superposition}\";",
+      "description \"Prepare a Bell pair and state its specification.\";",
+      "",
+      "state bell := \\$\\frac{\\ket{00} + \\ket{11}}{\\sqrt{2}}\\$;",
+      "",
+      "algorithm bell(q : Qubit[2]) {",
+      "  H(q[0])",
+      "  CX(q[0], q[1])",
+      "}",
+      "",
+      "spec bell {",
+      "  requires \\$q = \\ket{00}\\$",
+      "  ensures \\$q = \\frac{\\ket{00} + \\ket{11}}{\\sqrt{2}}\\$",
+      "  costs \\$G = 2\\$",
+      "}",
+      "",
+      "proof bell {",
+      "  goal \\$\\braket{\\psi}{\\psi} = 1\\$",
+      "  admit \"${3:Normalization proof remains open.}\"",
+      "}",
+      "$0"
+    ]
+  },
+  "Indexed quantum superposition": {
+    "prefix": "qp-state",
+    "description": "A parameterized state written with an indexed sum and kets",
+    "body": [
+      "state ${1:uniform} := \\$",
+      "  \\frac{1}{\\sqrt{2^{${2:n}}}}",
+      "  \\sum_{x=0}^{2^{${2:n}}-1} \\ket{x}",
+      "\\$;",
+      "$0"
+    ]
+  },
+  "Tensor product state": {
+    "prefix": "qp-tensor",
+    "description": "A tensor product of two quantum states",
+    "body": ["state ${1:joint} := \\$\\ket{${2:\\psi}} \\otimes \\ket{${3:\\phi}}\\$;", "$0"]
+  },
+  "Algorithm specification": {
+    "prefix": "qp-spec",
+    "description": "Precondition, postcondition, and resource claim for an algorithm",
+    "body": [
+      "spec ${1:algorithm_name} {",
+      "  requires \\$q = \\ket{${2:0}}\\$",
+      "  ensures \\$q = \\ket{${3:\\psi}}\\$",
+      "  costs \\$${4:G = 1}\\$",
+      "}",
+      "$0"
+    ]
+  },
+  "Named mathematical assumption": {
+    "prefix": "qp-assume",
+    "description": "Name an assumption so it remains visible in the research document",
+    "body": ["assume ${1:positive} : \\$${2:n \\ge 1}\\$;", "$0"]
+  },
+  "Open proof obligation": {
+    "prefix": "qp-proof",
+    "description": "State a mathematical goal with a visibly unfinished proof",
+    "body": [
+      "proof ${1:algorithm_name} {",
+      "  goal \\$${2:1 = 1}\\$",
+      "  admit \"${3:Proof remains open.}\"",
+      "}",
+      "$0"
+    ]
+  }
+}

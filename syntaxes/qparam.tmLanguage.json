@@ -1,0 +1,96 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "QParam",
+  "scopeName": "source.qparam",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#math" },
+    { "include": "#strings" },
+    {
+      "match": "\\b(qparam)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "keyword.declaration.module.qparam" },
+        "2": { "name": "entity.name.namespace.qparam" }
+      }
+    },
+    {
+      "match": "\\b(assume)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "keyword.control.assumption.qparam" },
+        "2": { "name": "entity.name.assumption.qparam" }
+      }
+    },
+    {
+      "match": "\\b(parameter)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "keyword.declaration.qparam" },
+        "2": { "name": "variable.parameter.qparam" }
+      }
+    },
+    {
+      "match": "\\b(state)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "keyword.declaration.qparam" },
+        "2": { "name": "entity.name.state.qparam" }
+      }
+    },
+    {
+      "match": "\\b(algorithm|spec|proof)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "keyword.declaration.qparam" },
+        "2": { "name": "entity.name.function.qparam" }
+      }
+    },
+    { "match": "\\b(admit|assume)\\b", "name": "keyword.control.assumption.qparam" },
+    { "match": "\\b(requires|ensures|costs|goal)\\b", "name": "keyword.control.specification.qparam" },
+    { "match": "\\b(title|description)\\b", "name": "keyword.other.metadata.qparam" },
+    { "match": "\\b(Nat|Int|Real|Complex|Bool|Qubit)\\b", "name": "support.type.qparam" },
+    { "match": "\\b(H|X|Y|Z|S|T|CX|CZ|SWAP|CCX|Rx|Ry|Rz|QFT|IQFT|measure|reset)\\b", "name": "support.function.quantum.qparam" },
+    { "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*\\()", "name": "entity.name.function.call.qparam" },
+    { "match": "\\b[0-9]+(?:\\.[0-9]+)?\\b", "name": "constant.numeric.qparam" },
+    { "match": ":=|->|=>|[=+*/^<>−×⊗†→≤≥]", "name": "keyword.operator.qparam" },
+    { "match": "[{}()\\[\\]]", "name": "punctuation.section.qparam" },
+    { "match": "[:,;]", "name": "punctuation.separator.qparam" }
+  ],
+  "repository": {
+    "comments": {
+      "name": "comment.line.double-slash.qparam",
+      "begin": "//",
+      "end": "$",
+      "patterns": [
+        { "match": "\\b(TODO|NOTE)\\b", "name": "keyword.other.comment.qparam" }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.qparam",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        { "match": "\\\\.", "name": "constant.character.escape.qparam" }
+      ]
+    },
+    "math": {
+      "name": "meta.math.qparam",
+      "contentName": "markup.math.qparam",
+      "begin": "\\$",
+      "beginCaptures": { "0": { "name": "punctuation.definition.math.begin.qparam" } },
+      "end": "\\$",
+      "endCaptures": { "0": { "name": "punctuation.definition.math.end.qparam" } },
+      "patterns": [
+        { "match": "\\\\[$%&#_{}\\\\]", "name": "constant.character.escape.math.qparam" },
+        { "match": "\\\\(?:ket|bra|braket|langle|rangle|psi|phi|varphi|Psi|Phi|rho|sigma|omega|Omega|theta|alpha|beta|gamma|delta|epsilon|varepsilon)(?![A-Za-z])", "name": "entity.name.state.math.qparam" },
+        { "match": "\\\\(?:sum|prod|bigotimes|otimes|oplus|bigoplus|dagger|cdot|times|circ|mapsto|to|rightarrow|Rightarrow|iff|implies|le|leq|ge|geq|ne|neq|in|notin|forall|exists|approx|equiv|sim|propto|pm|mp)(?![A-Za-z])", "name": "keyword.operator.math.qparam" },
+        { "match": "\\\\(?:frac|sqrt|left|right|middle|underbrace|overbrace|overline|bar|hat|widehat|vec|begin|end|limits|nolimits)(?![A-Za-z])", "name": "support.function.layout.math.qparam" },
+        { "match": "\\\\(?:mathbb|mathcal|mathrm|mathbf|mathsf|operatorname|text)(?![A-Za-z])", "name": "support.type.math.qparam" },
+        { "match": "\\\\[A-Za-z]+", "name": "support.function.math.qparam" },
+        { "match": "[ψφΨΦρσθωαβγδε]|[⟨⟩]", "name": "entity.name.state.math.qparam" },
+        { "match": "[∑∏⊗⊕†·×∘→⇒↦≤≥≠∈∀∃≈≡∼±=+*/<>−-]", "name": "keyword.operator.math.qparam" },
+        { "match": "[ℕℤℝℂ]", "name": "support.type.math.qparam" },
+        { "match": "[0-9]+(?:\\.[0-9]+)?", "name": "constant.numeric.math.qparam" },
+        { "match": "[_^]", "name": "punctuation.separator.script.math.qparam" },
+        { "match": "[{}()\\[\\]|]", "name": "punctuation.section.math.qparam" },
+        { "match": "\\\\[,;:!]", "name": "punctuation.separator.spacing.math.qparam" }
+      ]
+    }
+  }
+}

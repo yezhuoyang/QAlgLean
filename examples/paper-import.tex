@@ -1,0 +1,28 @@
+\documentclass{article}
+\usepackage{amsmath,amssymb,fancyvrb}
+\DefineVerbatimEnvironment{qparam}{Verbatim}{}
+\begin{document}
+\section*{An executable mathematical companion}
+This paper contains one explicit QParam source block. In QParam Studio, run
+``QParam: Import QParam Block from LaTeX'' to open its authoring document.
+The surrounding prose and arbitrary TeX macros are not compiled as programs.
+
+\begin{qparam}
+qparam PaperCompanion
+title "A Bell state, from a paper"
+description "An explicit source block imported from LaTeX. Mathematical claims remain unverified."
+state bell := $\frac{1}{\sqrt{2}}(\ket{00} + \ket{11})$
+algorithm bell(q : Qubit[2]) {
+  H(q[0])
+  CX(q[0], q[1])
+}
+spec bell {
+  requires $\ket{\psi} = \ket{0} \otimes \ket{0}$
+  ensures $\ket{\psi} = \frac{1}{\sqrt{2}}(\ket{00} + \ket{11})$
+  costs $G = 2$
+}
+proof bell {
+  admit "The initial release checks authoring syntax, not this theorem."
+}
+\end{qparam}
+\end{document}

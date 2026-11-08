@@ -1,0 +1,9 @@
+node_modules/
+dist/
+artifacts/
+media/katex/
+.vscode-test/
+.playwright-cli/
+output/
+*.vsix
+*.log

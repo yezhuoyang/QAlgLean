@@ -1,0 +1,34 @@
+qparam FourierNotebook
+title "The geometry of a Fourier state"
+description "A parameterized mathematical notebook with indexed superpositions, tensor products, and explicit assumptions. The algorithm below prepares the uniform state; the Fourier expression is a separate mathematical definition."
+
+parameter n : Nat
+parameter x : Nat
+assume positive : $n \ge 1$
+assume basis_index : $0 \le x < 2^{n}$
+
+state zero := $\bigotimes_{j=0}^{n-1}\ket{0}$
+state uniform := $
+  \frac{1}{\sqrt{2^{n}}}\sum_{y=0}^{2^{n}-1}\ket{y}
+$
+state fourier := $
+  \frac{1}{\sqrt{2^{n}}}\sum_{y=0}^{2^{n}-1}
+  \exp\left(\frac{2\pi ixy}{2^{n}}\right)\ket{y}
+$
+
+algorithm uniform(q : Qubit[n]) {
+  repeat j in 0..n {
+    H(q[j])
+  }
+}
+
+spec uniform {
+  requires $\ket{\psi} = \bigotimes_{j=0}^{n-1}\ket{0}$
+  ensures $\ket{\psi} = \frac{1}{\sqrt{2^{n}}}\sum_{y=0}^{2^{n}-1}\ket{y}$
+  costs $G = n$
+}
+
+proof uniform {
+  goal $\norm{\ket{\psi}}^{2} = 1$
+  admit "Discharge the tensor-product semantics and normalization obligation. No proof is checked yet."
+}

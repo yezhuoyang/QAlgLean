@@ -1,0 +1,23 @@
+qparam BellPair
+title "Two qubits, one shared state"
+description "A Hadamard and a controlled-X connect two independent qubits. Follow their states, the program, and its mathematical specification in one research document."
+
+// States are mathematical expressions; this is not a simulator.
+state initial := $\ket{0} \otimes \ket{0}$
+state bell := $\frac{1}{\sqrt{2}}\left(\ket{00} + \ket{11}\right)$
+
+algorithm bell(q : Qubit[2]) {
+  H(q[0])
+  CX(q[0], q[1])
+}
+
+spec bell {
+  requires $\ket{\psi} = \ket{0} \otimes \ket{0}$
+  ensures $\ket{\psi} = \frac{1}{\sqrt{2}}\left(\ket{00} + \ket{11}\right)$
+  costs $G = 2$
+}
+
+proof bell {
+  goal $\braket{\psi}{\psi} = 1$
+  admit "Prove the gate semantics and normalization in the future QP kernel."
+}
