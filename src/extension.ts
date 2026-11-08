@@ -4,6 +4,7 @@ import { parseDocument, QDocument } from './language/document';
 import { renderDocument } from './preview/render';
 import { insideMath, notations } from './editor/notation';
 import { exportLatex, importLatex } from './editor/latex';
+import { MathEditorProvider } from './editor/provider';
 
 /** The extension provides syntax services and a paper view, never a proof verdict. */
 export function activate(context: vscode.ExtensionContext) {
@@ -12,6 +13,10 @@ export function activate(context: vscode.ExtensionContext) {
   let panel: vscode.WebviewPanel | undefined;
   let previewDocument: vscode.TextDocument | undefined;
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
+  const mathEditors = new MathEditorProvider(context, doc => openPreview(doc));
+  context.subscriptions.push(mathEditors, vscode.window.registerCustomEditorProvider(MathEditorProvider.viewType, mathEditors, {
+    webviewOptions: { retainContextWhenHidden: true }, supportsMultipleEditorsPerDocument: false
+  }));
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 80);
   status.command = 'qparam.openPreview';
   status.tooltip = 'Open the paper preview. This release checks syntax, not proofs.';
@@ -19,7 +24,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   function parse(doc: vscode.TextDocument): QDocument {
     if (doc.getText().length > 500_000) {
-      return { name: 'Document', title: 'Document size limit', description: '', sections: [], diagnostics: [
+      return { name: 'Document', title: 'Document size limit', description: '', sections: [], program: { algorithms: [], oracles: [] }, diagnostics: [
         { line: 0, column: 0, length: 1, severity: 'error', message: 'The interactive frontend supports documents up to 500,000 characters.' }
       ] };
     }
@@ -53,7 +58,7 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   async function openPreview(doc?: vscode.TextDocument) {
-    const source = doc || vscode.window.activeTextEditor?.document || previewDocument;
+    const source = doc || mathEditors.activeDocument || vscode.window.activeTextEditor?.document || previewDocument;
     if (!source || source.languageId !== 'qparam') {
       await vscode.window.showInformationMessage('Open a .qp document, or use QParam: Open an Example.');
       return;
@@ -84,29 +89,42 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('qparam.openMathEditor', async () => {
+      const doc = mathEditors.activeDocument || vscode.window.activeTextEditor?.document;
+      if (doc?.languageId === 'qparam') await vscode.commands.executeCommand('vscode.openWith', doc.uri, MathEditorProvider.viewType);
+    }),
     vscode.commands.registerCommand('qparam.openPreview', () => openPreview()),
     vscode.commands.registerCommand('qparam.openExample', async () => {
       const selected = await vscode.window.showQuickPick([
         { label: 'Bell pair', description: 'States, gates, tensor products, and a specification', file: 'bell.qp' },
-        { label: 'Fourier state notebook', description: 'Indexed superpositions, complex phases, and uniform preparation', file: 'fourier.qp' }
+        { label: 'Fourier state notebook', description: 'Indexed superpositions and uniform preparation', file: 'fourier.qp' },
+        { label: 'Deutsch–Jozsa', description: 'One-query circuit and promise specification', file: 'deutsch-jozsa.qp' },
+        { label: 'Bernstein–Vazirani', description: 'Parity oracle and hidden-string recovery', file: 'bernstein-vazirani.qp' },
+        { label: 'Grover search', description: 'Parametric iterations and a gate-level diffuser', file: 'grover.qp' },
+        { label: 'Quantum Fourier transform', description: 'Controlled phases, bit reversal, and adjoint calls', file: 'qft.qp' },
+        { label: 'Shor order finding', description: 'Circuit skeleton with explicit arithmetic oracles', file: 'shor-order-finding.qp' },
+        { label: 'Hamiltonian simulation / block encoding', description: 'Operator contracts and approximation obligations', file: 'hamiltonian-block-encoding.qp' },
+        { label: 'LWE research obligations', description: 'Lattices and open obligations; no claimed implementation', file: 'lwe-obligations.qp' }
       ], { title: 'Your first QParam research document' });
       if (!selected) return;
       const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(context.extensionUri, 'examples', selected.file));
       const doc = await vscode.workspace.openTextDocument({ language: 'qparam', content: new TextDecoder().decode(bytes) });
-      await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
-      await openPreview(doc);
+      await vscode.commands.executeCommand('vscode.openWith', doc.uri, MathEditorProvider.viewType);
     }),
     vscode.commands.registerCommand('qparam.insertMath', async () => {
       const editor = vscode.window.activeTextEditor;
-      if (editor?.document.languageId !== 'qparam') return;
+      if (!mathEditors.activeDocument && editor?.document.languageId !== 'qparam') return;
+      const mathDocument = mathEditors.activeDocument;
       const chosen = await vscode.window.showQuickPick(notations.map(n => ({ label: n.label, description: n.detail, notation: n })), { title: 'Insert mathematical notation' });
       if (!chosen) return;
+      if (mathDocument) { mathEditors.insertNotation(mathDocument, chosen.notation.latex); return; }
+      if (!editor) return;
       const prefix = editor.document.getText(new vscode.Range(new vscode.Position(0, 0), editor.selection.active));
       const body = insideMath(prefix) ? chosen.notation.latex : `\\$${chosen.notation.latex}\\$`;
       await editor.insertSnippet(new vscode.SnippetString(body));
     }),
     vscode.commands.registerCommand('qparam.exportLatex', async () => {
-      const doc = vscode.window.activeTextEditor?.document.languageId === 'qparam' ? vscode.window.activeTextEditor.document : previewDocument;
+      const doc = mathEditors.activeDocument || (vscode.window.activeTextEditor?.document.languageId === 'qparam' ? vscode.window.activeTextEditor.document : previewDocument);
       if (!doc) { await vscode.window.showInformationMessage('Open a QParam document to export.'); return; }
       try {
         const parsed = parse(doc);
@@ -121,8 +139,7 @@ export function activate(context: vscode.ExtensionContext) {
       try {
         const content = importLatex(editor.document.getText());
         const doc = await vscode.workspace.openTextDocument({ language: 'qparam', content });
-        await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
-        await openPreview(doc);
+        await vscode.commands.executeCommand('vscode.openWith', doc.uri, MathEditorProvider.viewType);
       } catch (error) { await vscode.window.showErrorMessage(error instanceof Error ? error.message : 'Unable to import this document.'); }
     }),
     vscode.workspace.onDidOpenTextDocument(update),
@@ -194,5 +211,9 @@ export function activate(context: vscode.ExtensionContext) {
   );
   vscode.workspace.textDocuments.forEach(update);
   // A small inspection surface for extension-host integration tests; no proof engine is implied.
-  return { parseDocument, diagnostics, getPreviewDocument: () => previewDocument?.uri.toString() };
+  return { parseDocument, diagnostics, getPreviewDocument: () => previewDocument?.uri.toString(),
+    getMathEditorDocuments: () => mathEditors.documents,
+    preserveMathDraft: (doc: vscode.TextDocument, value: unknown) => mathEditors.preserveDraft(doc, value),
+    getMathDraft: (doc: vscode.TextDocument) => mathEditors.getRecoveryDraft(doc),
+    applyMathEdit: (doc: vscode.TextDocument, input: unknown) => mathEditors.applyEdit(doc, input) };
 }

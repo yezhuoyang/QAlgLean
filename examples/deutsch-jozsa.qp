@@ -1,0 +1,38 @@
+qparam DeutschJozsa
+title "Deutsch–Jozsa: one query, an interference pattern"
+description "An oracle circuit for the constant-versus-balanced promise problem. x and y denote n-bit strings in the formulas; their dot product is modulo two. The oracle contract and algorithm specification are authored obligations."
+
+parameter n : Nat
+assume width : $n \ge 1$
+assume boolean_function : $f : \{0,1\}^{n} \to \{0,1\}$
+assume promise : $(\sum_{x=0}^{2^{n}-1}(-1)^{f(x)}=0) \lor (\abs{\sum_{x=0}^{2^{n}-1}(-1)^{f(x)}}=2^{n})$
+
+oracle Uf(x : Qubit[n], y : Qubit)
+spec Uf {
+  requires $\ket{\psi}=\ket{x}\otimes\ket{b}$
+  ensures $\ket{\psi}=\ket{x}\otimes\ket{b\oplus f(x)}$
+}
+
+algorithm deutsch_jozsa(q : Qubit[n], ancilla : Qubit) {
+  X(ancilla)
+  H(ancilla)
+  repeat j in 0..n {
+    H(q[j])
+  }
+  call Uf(q, ancilla)
+  repeat j in 0..n {
+    H(q[j])
+  }
+  measure q -> b
+}
+
+spec deutsch_jozsa {
+  requires $\ket{\psi}=\ket{0}^{\otimes n}\otimes\ket{0}$
+  probability $\Pr(b=0^{n})=\left(\frac{1}{2^{n}}\sum_{x=0}^{2^{n}-1}(-1)^{f(x)}\right)^{2}$
+  costs $Q=1$
+}
+
+proof deutsch_jozsa {
+  goal $\sum_{y=0}^{2^{n}-1}\abs{\frac{1}{2^{n}}\sum_{x=0}^{2^{n}-1}(-1)^{f(x)+x\cdot y}}^{2}=1$
+  admit "Bind the register state, specify bitstring indexing, discharge the oracle contract, and prove the interference and measurement rules."
+}

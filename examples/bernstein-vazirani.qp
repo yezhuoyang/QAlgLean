@@ -1,0 +1,39 @@
+qparam BernsteinVazirani
+title "Bernstein–Vazirani: recover a hidden string"
+description "The parameterized query circuit assumes a reversible parity oracle. Its implementation depends on the supplied hidden string; the oracle is explicitly external."
+
+parameter n : Nat
+assume width : $n\ge 1$
+assume hidden_string : $s\in\{0,1\}^{n}$
+assume parity : $\forall x\in\{0,1\}^{n}, f(x)=s\cdot x\bmod 2$
+
+oracle parity(x : Qubit[n], target : Qubit)
+spec parity {
+  requires $\ket{\psi}=\ket{x}\otimes\ket{b}$
+  ensures $\ket{\psi}=\ket{x}\otimes\ket{b\oplus f(x)}$
+}
+
+algorithm bernstein_vazirani(q : Qubit[n], target : Qubit) {
+  X(target)
+  H(target)
+  repeat j in 0..n {
+    H(q[j])
+  }
+  call parity(q, target)
+  repeat j in 0..n {
+    H(q[j])
+  }
+  measure q -> b
+}
+
+spec bernstein_vazirani {
+  requires $\ket{\psi}=\ket{0}^{\otimes n}\otimes\ket{0}$
+  ensures $b=s$
+  probability $\Pr(b=s)=1$
+  costs $Q=1$
+}
+
+proof bernstein_vazirani {
+  goal $\frac{1}{2^{n}}\sum_{x=0}^{2^{n}-1}(-1)^{s\cdot x+x\cdot y}=\delta_{s,y}$
+  admit "Prove character orthogonality over bitstrings and connect it to this circuit and its measurement."
+}

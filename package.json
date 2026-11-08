@@ -1,8 +1,8 @@
 {
   "name": "qparam-studio",
   "displayName": "QParam Studio",
-  "description": "Write quantum algorithms as mathematics. A colorful language editor and live typeset research notebook for QParam.",
-  "version": "0.1.0",
+  "description": "Quantum programs and specifications with mathematics rendered directly in the VS Code editor.",
+  "version": "0.2.0",
   "publisher": "yezhuoyang",
   "license": "Apache-2.0",
   "repository": {
@@ -27,7 +27,8 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onLanguage:qparam"
+    "onLanguage:qparam",
+    "onCustomEditor:qparam.mathEditor"
   ],
   "capabilities": {
     "untrustedWorkspaces": {
@@ -38,6 +39,18 @@
     }
   },
   "contributes": {
+    "customEditors": [
+      {
+        "viewType": "qparam.mathEditor",
+        "displayName": "QParam Mathematical Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.qp"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
     "languages": [
       {
         "id": "qparam",
@@ -64,14 +77,12 @@
         "path": "./snippets/qparam.json"
       }
     ],
-    "themes": [
-      {
-        "label": "QParam Midnight",
-        "uiTheme": "vs-dark",
-        "path": "./themes/qparam-midnight.json"
-      }
-    ],
     "commands": [
+      {
+        "command": "qparam.openMathEditor",
+        "title": "QParam: Open Mathematical Editor",
+        "icon": "$(symbol-operator)"
+      },
       {
         "command": "qparam.openPreview",
         "title": "QParam: Open Paper Preview",
@@ -96,6 +107,11 @@
     ],
     "menus": {
       "editor/title": [
+        {
+          "command": "qparam.openMathEditor",
+          "when": "editorLangId == qparam && activeCustomEditorId != qparam.mathEditor",
+          "group": "navigation"
+        },
         {
           "command": "qparam.openPreview",
           "when": "editorLangId == qparam",
@@ -129,15 +145,26 @@
     "build": "npm run compile && node scripts/build.cjs",
     "watch": "tsc -watch -p .",
     "test": "npm run build && node --test test/*.test.cjs",
-    "package": "npm run build && node -e \"require('fs').mkdirSync('artifacts',{recursive:true})\" && vsce package --no-dependencies --out artifacts/qparam-studio-0.1.0.vsix",
+    "package": "npm run build && node -e \"require('fs').mkdirSync('artifacts',{recursive:true})\" && vsce package --no-dependencies --out artifacts/qparam-studio-0.2.0.vsix",
     "vscode:prepublish": "npm run build",
     "preview": "npm run build && node scripts/preview.cjs",
     "test:extension": "npm run build && node scripts/test-extension.cjs"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.4",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/search": "^6.7.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
+    "@lezer/highlight": "^1.2.5",
     "katex": "^0.19.1"
   },
-  "overrides": { "@vscode/vsce": { "minimatch": "^11.0.1" } },
+  "overrides": {
+    "@vscode/vsce": {
+      "minimatch": "^11.0.1"
+    }
+  },
   "devDependencies": {
     "@types/katex": "^0.16.7",
     "@types/node": "^22.0.0",

@@ -1,0 +1,26 @@
+qparam LWEAuditObligations
+title "LWE: a notebook of obligations, not a claimed solver"
+description "Notation and audit-scoping example motivated by Yilei Chen's withdrawn 2024 polynomial-time LWE claim. These formulas are generic LWE and complex-Gaussian notation, not a transcription of his algorithm or its erroneous Step 9. No algorithm or bug detection is claimed here."
+
+parameter n : Nat
+parameter m : Nat
+parameter q : Nat
+parameter sigma : Real
+assume modulus : $q\ge 2$
+assume secret : $s\in\mathbb{Z}_{q}^{n}$
+assume samples : $b=As+e\pmod{q}$
+assume gaussian_width : $\sigma>0$
+assume positive_real_part : $\operatorname{Re}(z)>0$
+
+state complex_gaussian := $\frac{1}{\sqrt{Z}}\sum_{x\in\mathbb{Z}^{n}}\exp(-\pi z\norm{x}^{2})\ket{x}$
+
+proof gaussian_preparation {
+  goal $Z=\sum_{x\in\mathbb{Z}^{n}}\abs{\exp(-\pi z\norm{x}^{2})}^{2}$
+  admit "This is infinite-dimensional mathematical notation. A finite circuit requires a truncation rule, tail-error bound, finite encoding, and an efficient preparation construction. None is supplied."
+}
+
+proof audit_boundary {
+  goal $\Pr(\hat{s}=s)\ge 2/3$
+  admit "There is no implemented solver or established success theorem. Transcribe the actual paper faithfully before attaching a verification obligation to any numbered step."
+  admit "The author's April 18, 2024 update identifies a bug in Step 9, Section 3.5.9. This frontend neither reproduces that step nor certifies detection of the bug."
+}

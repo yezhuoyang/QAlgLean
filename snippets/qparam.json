@@ -60,6 +60,35 @@
     "description": "Name an assumption so it remains visible in the research document",
     "body": ["assume ${1:positive} : \\$${2:n \\ge 1}\\$;", "$0"]
   },
+  "Parametric circuit": {
+    "prefix": "qp-algorithm",
+    "description": "A reusable circuit with a register parameter and indexed loop",
+    "body": [
+      "algorithm ${1:prepare}(q : Qubit[${2:n}]) {",
+      "  repeat ${3:j} in 0..${2:n} {",
+      "    ${4:H}(q[${3:j}])",
+      "  }",
+      "}",
+      "$0"
+    ]
+  },
+  "Explicit external oracle": {
+    "prefix": "qp-oracle",
+    "description": "Declare an opaque primitive with a visible contract to discharge",
+    "body": [
+      "oracle ${1:U}(q : Qubit[${2:n}])",
+      "spec ${1:U} {",
+      "  requires \\$\\ket{\\psi}=\\ket{${3:x}}\\$",
+      "  ensures \\$\\ket{\\psi}=${4:U}\\ket{${3:x}}\\$",
+      "}",
+      "$0"
+    ]
+  },
+  "Controlled circuit call": {
+    "prefix": "qp-controlled",
+    "description": "A control register and an explicitly declared circuit call",
+    "body": ["controlled(${1:control}) call ${2:U}(${3:q})$0"]
+  },
   "Open proof obligation": {
     "prefix": "qp-proof",
     "description": "State a mathematical goal with a visibly unfinished proof",

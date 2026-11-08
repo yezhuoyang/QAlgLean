@@ -1,4 +1,6 @@
 import { QDocument } from '../language/document';
+import { latexMathPreamble } from '../language/math-syntax';
+import { toMathLatex } from '../language/math';
 
 /** Text is escaped separately from the deliberately restricted mathematical fragment. */
 export function escapeLatex(text: string): string {
@@ -17,11 +19,7 @@ export function exportLatex(doc: QDocument): string {
     '\\usepackage{fontspec,unicode-math}',
     '\\setmainfont{lmroman10-regular.otf}[BoldFont=lmroman10-bold.otf,ItalicFont=lmroman10-italic.otf,BoldItalicFont=lmroman10-bolditalic.otf]',
     '\\setmathfont{latinmodern-math.otf}', '\\geometry{margin=1in}',
-    '\\newcommand{\\ket}[1]{\\left|#1\\right\\rangle}',
-    '\\newcommand{\\bra}[1]{\\left\\langle#1\\right|}',
-    '\\newcommand{\\braket}[2]{\\left\\langle#1\\middle|#2\\right\\rangle}',
-    '\\newcommand{\\norm}[1]{\\left\\lVert#1\\right\\rVert}',
-    '\\DeclareMathOperator{\\Tr}{Tr}',
+    ...latexMathPreamble,
     `\\title{${escapeLatex(doc.title || doc.name)}}`, '\\author{QParam research document}', '\\date{}',
     '\\begin{document}', '\\maketitle', escapeLatex(doc.description),
     '\\begin{quote}\\small Frontend document. Mathematical claims and programs have not been proof-checked.\\end{quote}'
@@ -36,7 +34,7 @@ export function exportLatex(doc: QDocument): string {
     }
     for (const item of section.items) {
       if (item.label) lines.push(`\\noindent\\textbf{${escapeLatex(item.label)}}\\quad`);
-      if (item.math) lines.push(`\\[${item.math}\\]`);
+      if (item.math) lines.push(`\\[${toMathLatex(item.math)}\\]`);
       else if (item.text) lines.push(`\\noindent\\texttt{${escapeLatex(item.text)}}\\par`);
     }
   }

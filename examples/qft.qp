@@ -1,0 +1,39 @@
+qparam QuantumFourierTransform
+title "The quantum Fourier transform"
+description "A concrete controlled-phase circuit with final bit reversal. Register q[0] is the most significant bit; Phase(theta) is diag(1, exp(i theta)). Arithmetic loop bounds are intended to be natural-valued, and division in bounds is floor division."
+
+parameter n : Nat
+parameter x : Nat
+assume width : $n\ge 1$
+assume basis_index : $0\le x<2^{n}$
+
+state fourier := $\frac{1}{\sqrt{2^{n}}}\sum_{y=0}^{2^{n}-1}\exp\left(\frac{2\pi ixy}{2^{n}}\right)\ket{y}$
+
+algorithm qft(q : Qubit[n]) {
+  repeat j in 0..n {
+    H(q[j])
+    repeat k in j+1..n {
+      controlled(q[k]) Phase($\pi/2^{k-j}$, q[j])
+    }
+  }
+  repeat j in 0..n/2 {
+    SWAP(q[j], q[n-1-j])
+  }
+}
+
+algorithm inverse_qft(q : Qubit[n]) {
+  adjoint call qft(q)
+}
+
+spec qft {
+  requires $\ket{\psi}=\ket{x}$
+  ensures $\ket{\psi}=\frac{1}{\sqrt{2^{n}}}\sum_{y=0}^{2^{n}-1}\exp\left(\frac{2\pi ixy}{2^{n}}\right)\ket{y}$
+  costs $G_{H}=n$
+  costs $G_{\mathrm{CP}}=n(n-1)/2$
+  costs $G_{\mathrm{SWAP}}=\lfloor n/2\rfloor$
+}
+
+proof qft {
+  goal $F^{\dagger}F=I$
+  admit "Prove phase-gate conventions, tensor order, loop bounds, final bit reversal, and adjoint expansion. Counts are authored logical-gate claims."
+}

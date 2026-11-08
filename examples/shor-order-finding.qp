@@ -1,0 +1,40 @@
+qparam ShorOrderFinding
+title "Shor: the quantum order-finding interface"
+description "An order-finding circuit skeleton, not a factoring implementation. Modular multiplication and inverse QFT are explicit external primitives. Reversible modular arithmetic, continued fractions, repetition, factoring reductions, and their resource proofs are still required."
+
+parameter n : Nat
+parameter m : Nat
+parameter N : Nat
+parameter a : Nat
+assume modulus : $1<N<2^{n}$
+assume coprime : $\operatorname{gcd}(a,N)=1$
+assume precision : $N^{2}\le 2^{m}$
+
+oracle modular_power(j : Nat, work : Qubit[n])
+spec modular_power {
+  requires $\ket{\psi}=\ket{y}\land 0\le y<N$
+  ensures $\ket{\psi}=\ket{a^{2^{j}}y\bmod N}$
+}
+oracle inverse_qft(phase : Qubit[m])
+
+algorithm order_sample(phase : Qubit[m], work : Qubit[n]) {
+  X(work[n-1])
+  repeat j in 0..m {
+    H(phase[j])
+    controlled(phase[j]) call modular_power(m-1-j, work)
+  }
+  call inverse_qft(phase)
+  measure phase -> b
+}
+
+spec order_sample {
+  requires $\ket{\psi}=\ket{0}^{\otimes m}\otimes\ket{0}^{\otimes n}$
+  ensures $0\le b<2^{m}$
+  costs $Q_{\mathrm{modular}}=m$
+}
+
+proof order_sample {
+  goal $\exists r\in\mathbb{N}, r\ge 1\land a^{r}\equiv 1\pmod{N}$
+  admit "The displayed goal is only an elementary number-theoretic prerequisite. Prove phase-estimation accuracy and recovery of the least positive order, then complete the classical factoring algorithm."
+  admit "The modular-power contract only specifies the valid residue subspace. Supply a unitary extension, reversible implementation, inverse-QFT contract, and gate-level resource bounds."
+}

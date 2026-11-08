@@ -1,0 +1,43 @@
+qparam HamiltonianBlockEncoding
+title "Hamiltonian simulation from a block encoding"
+description "An interface notebook for an (alpha, a, epsilon)-block encoding and approximate time evolution. U and simulate are opaque external primitives. The example makes their approximation and cost obligations visible; it does not implement QSVT or prove an optimal simulation bound."
+
+parameter n : Nat
+parameter a : Nat
+parameter alpha : Real
+parameter epsilon : Real
+parameter delta : Real
+parameter t : Real
+assume scale : $\alpha>0$
+assume accuracy : $\epsilon\ge 0$
+assume simulation_accuracy : $\delta\ge 0$
+assume hermitian : $H=H^{\dagger}$
+assume unitary : $U^{\dagger}U=UU^{\dagger}=I$
+assume block_encoding : $\norm{H-\alpha(\bra{0}^{\otimes a}\otimes I)U(\ket{0}^{\otimes a}\otimes I)}\le\epsilon$
+
+oracle U(ancilla : Qubit[a], system : Qubit[n])
+oracle simulate(time : Real, ancilla : Qubit[a], system : Qubit[n])
+spec simulate {
+  requires $\ket{\psi}=\ket{0}^{\otimes a}\otimes\ket{\phi}$
+  ensures $\norm{\ket{\psi}-\ket{0}^{\otimes a}\otimes\exp(-itH)\ket{\phi}}\le\delta$
+}
+
+algorithm evolve(ancilla : Qubit[a], system : Qubit[n]) {
+  call simulate($t$, ancilla, system)
+}
+
+algorithm signal_echo(ancilla : Qubit[a], system : Qubit[n], control : Qubit) {
+  controlled(control) call U(ancilla, system)
+  adjoint controlled(control) call U(ancilla, system)
+}
+
+spec signal_echo {
+  requires $\ket{\psi}=\ket{\phi}$
+  ensures $\ket{\psi}=\ket{\phi}$
+  costs $Q_{U}+Q_{U^{\dagger}}=2$
+}
+
+proof evolve {
+  goal $\norm{V-\exp(-itH)}\le\delta$
+  admit "Declare and relate all mathematical operators and error parameters. Implement simulate, choose a polynomial/phase synthesis method, and prove its approximation and resource bounds."
+}

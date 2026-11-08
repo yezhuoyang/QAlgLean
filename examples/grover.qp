@@ -1,0 +1,51 @@
+qparam GroverSearch
+title "Grover search: rotate toward a marked basis state"
+description "A parameterized query circuit with a declared phase oracle and a gate-level diffusion construction. The chosen diffuser differs from 2|u><u|-I by a global minus sign, which leaves the stated success probability unchanged. Multi-controlled Z still needs a lowering rule."
+
+parameter n : Nat
+parameter k : Nat
+parameter w : Nat
+assume width : $n\ge 2$
+assume marked_index : $0\le w<2^{n}$
+assume angle : $\theta=\arcsin\left(\frac{1}{\sqrt{2^{n}}}\right)$
+state uniform := $\frac{1}{\sqrt{2^{n}}}\sum_{x=0}^{2^{n}-1}\ket{x}$
+
+oracle mark(q : Qubit[n])
+spec mark {
+  requires $\ket{\psi}=\ket{x}$
+  ensures $\ket{\psi}=(-1)^{\delta_{x,w}}\ket{x}$
+}
+
+algorithm diffuse(q : Qubit[n]) {
+  repeat j in 0..n {
+    H(q[j])
+    X(q[j])
+  }
+  controlled(q[0..n-1]) Z(q[n-1])
+  repeat j in 0..n {
+    X(q[j])
+    H(q[j])
+  }
+}
+
+algorithm search(q : Qubit[n]) {
+  repeat j in 0..n {
+    H(q[j])
+  }
+  repeat step in 0..k {
+    call mark(q)
+    call diffuse(q)
+  }
+  measure q -> b
+}
+
+spec search {
+  requires $\ket{\psi}=\ket{0}^{\otimes n}$
+  probability $\Pr(b=w)=\sin((2k+1)\theta)^{2}$
+  costs $Q=k$
+}
+
+proof search {
+  goal $\Pr(b=w)=\sin((2k+1)\theta)^{2}$
+  admit "Establish the two-dimensional invariant, oracle semantics, global-phase equivalence, and measurement distribution. No optimal iteration count is asserted."
+}

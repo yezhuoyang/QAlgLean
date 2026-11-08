@@ -2,6 +2,8 @@ node_modules/
 dist/
 artifacts/
 media/katex/
+media/editor.js
+media/licenses/
 .vscode-test/
 .playwright-cli/
 output/

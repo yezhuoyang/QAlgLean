@@ -33,6 +33,36 @@ exports.run = async () => {
   assert.ok(completionDoc.getText().includes('$\\sum_'), 'completion retains literal math delimiter and LaTeX');
   assert.ok(completionDoc.getText().endsWith('$'), 'completion balances math delimiter');
   assert.equal(api.parseDocument(completionDoc.getText()).diagnostics.length, 0, 'inserted sum parses');
+
+  // Opening an actual .qp file chooses the mathematical editor automatically.
+  const fixture = vscode.Uri.joinPath(extension.extensionUri, '.vscode-test/math-editor.qp');
+  const original = 'qparam InlineMath\r\nstate psi := $\\ket{0}$\r\n';
+  await vscode.workspace.fs.writeFile(fixture, Buffer.from(original));
+  await vscode.commands.executeCommand('vscode.open', fixture);
+  await waitFor(() => api.getMathEditorDocuments().includes(fixture.toString()), 'default mathematical editor');
+  const mathDoc = await vscode.workspace.openTextDocument(fixture);
+  const version = mathDoc.version;
+  const source = mathDoc.getText().replace(/\r\n/g, '\n');
+  const offset = source.indexOf('{0}') + 1;
+  const request = { type: 'edit', requestId: 1, version, changes: [{ from: offset, to: offset + 1, text: '1' }] };
+  await api.preserveMathDraft(mathDoc, { source: source.replace('{0}', '{1}'), base: source });
+  assert.equal(api.getMathDraft(mathDoc).source, source.replace('{0}', '{1}'), 'queued typing has a recovery draft');
+  const result = await api.applyMathEdit(mathDoc, request);
+  assert.equal(result.accepted, true, 'webview edits apply to the real TextDocument');
+  assert.equal(api.getMathDraft(mathDoc), undefined, 'applied drafts retire automatically');
+  assert.equal(mathDoc.getText(), original.replace('{0}', '{1}'), 'LF wire offsets preserve a CRLF file');
+  assert.equal(mathDoc.isDirty, true, 'normal VS Code dirty state');
+  assert.equal((await api.applyMathEdit(mathDoc, request)).accepted, false, 'stale edit rejected');
+  await mathDoc.save();
+  assert.equal(Buffer.from(await vscode.workspace.fs.readFile(fixture)).toString('utf8'), original.replace('{0}', '{1}'));
+  await vscode.commands.executeCommand('undo');
+  await waitFor(() => mathDoc.getText() === original, 'VS Code undo restores LaTeX source');
+  await vscode.commands.executeCommand('redo');
+  await waitFor(() => mathDoc.getText().includes('{1}'), 'VS Code redo restores edit');
+  await mathDoc.save();
+  await vscode.commands.executeCommand('vscode.openWith', fixture, 'default');
+  await waitFor(() => vscode.window.activeTextEditor?.document.uri.toString() === fixture.toString(), 'ordinary source editor');
+  assert.ok(vscode.window.activeTextEditor.document.getText().includes('$\\ket{1}$'), 'source and mathematical views share text');
   console.log('QPARAM_EXTENSION_TESTS_PASSED');
   await vscode.commands.executeCommand('workbench.action.closeAllEditors');
 };
