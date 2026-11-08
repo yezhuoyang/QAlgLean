@@ -1,0 +1,81 @@
+qparam UnknownAmplitudeSearch
+title "QSearch: search without knowing the success amplitude"
+description "Brassard, Hoyer, Mosca and Tapp, quant-ph/0005055, Section 2 Algorithm QSearch and Theorem 3. Both the direct trial and the randomized amplification trial are present. Classical randomness and the predicate are external contracts; expected-cost claims are obligations."
+
+parameter n : Nat
+parameter c : Real
+parameter a : Real
+assume growth : $1<c<2$
+assume nonzero : $0<a\le 1$
+assume unitary : $A^{\dagger}A=I$
+assume reflections : $S_{0}=I-2\ketbra{0^{n}}{0^{n}}\land S_{\chi}=\sum_{x\in\{0,1\}^{n}}(-1)^{\chi(x)}\ketbra{x}{x}$
+assume success_mass : $a=\sum_{x:\chi(x)=1}\abs{\bra{x}A\ket{0}^{\otimes n}}^{2}$
+oracle prepare(q : Qubit[n])
+oracle zero_reflection(q : Qubit[n])
+oracle good_reflection(q : Qubit[n])
+classical uniform_integer(lo : Nat, hi : Nat) -> Nat
+classical good(x : Bit[n]) -> Bool
+spec prepare {
+  requires $\ket{q}=\ket{v}$
+  ensures $\ket{q}=A\ket{v}$
+}
+spec zero_reflection {
+  requires $\ket{q}=\ket{v}$
+  ensures $\ket{q}=(I-2\ketbra{0^{n}}{0^{n}})\ket{v}$
+}
+spec good_reflection {
+  requires $\ket{q}=\ket{x}$
+  ensures $\ket{q}=(-1)^{\chi(x)}\ket{x}$
+}
+spec uniform_integer {
+  requires $1\le l\le h$
+  ensures $l\le r\le h$
+  probability $\forall k\in\{l,\ldots,h\},\Pr(r=k)=\frac{1}{h-l+1}$
+}
+spec good {
+  ensures $b=\chi(x)$
+}
+
+algorithm search() -> Bit[n] {
+  var l : Nat := $0$
+  while $1=1$ {
+    invariant $l\ge 0$
+    set l := $l+1$
+    let M : Nat := $\lceil c^{l}\rceil$
+    allocate q : Qubit[n]
+    call prepare(q)
+    measure q -> x
+    let b : Bool := call good(x)
+    if $b=1$ {
+      discard q
+      return $x$
+    }
+    reset(q)
+    call prepare(q)
+    let j : Nat := call uniform_integer(1, M)
+    repeat k in 0..j {
+      call good_reflection(q)
+      adjoint call prepare(q)
+      call zero_reflection(q)
+      call prepare(q)
+    }
+    assert $\ket{q}=(-1)^{j}Q^{j}A\ket{0}^{\otimes n}$
+    measure q -> z
+    let d : Bool := call good(z)
+    discard q
+    if $d=1$ {
+      return $z$
+    }
+  }
+}
+spec search {
+  requires $Q=-AS_{0}A^{\dagger}S_{\chi}$
+  ensures $\chi(z)=1$
+  probability $\Pr(\operatorname{termination})=1$
+  costs $\mathbb{E}(Q_{A}+Q_{A^{\dagger}})\in\Theta(1/\sqrt{a})$
+}
+proof search {
+  goal $\chi(z)=1$
+  admit "Name z in the contract denotes the returned string from either branch. The omitted overall sign in each uncontrolled iterate has no effect on the measurement distribution; the assertion records it."
+  admit "Supply independent uniform sampling, exact reflection semantics, almost-sure termination for a>0 and the expected-query proof of Theorem 3, with c a fixed constant independent of the problem size. For a=0 this unbounded algorithm does not terminate."
+}

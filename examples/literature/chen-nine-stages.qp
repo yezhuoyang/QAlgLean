@@ -1,0 +1,231 @@
+qparam ChenNineStages
+title "Chen 2024: nine stages of the withdrawn LWE claim"
+description "Source-specific syntax transcription of Sections 3.2-3.5, April 10 report. The author's April 18 update withdraws the polynomial-time LWE claim because Step 9 is wrong. Assertions below record claims under audit, including the invalid transition; parsing proves none of them. Arithmetic, Fourier, Gaussian and CRT interfaces are explicit external primitives. See docs/literature/chen.md for source locators and remaining circuit encodings."
+
+parameter n : Nat
+parameter m : Nat
+parameter ell : Nat
+parameter kappa : Nat
+parameter q : Nat
+parameter D : Nat
+parameter P : Nat
+parameter M : Nat
+parameter w : Nat
+parameter c : Nat
+parameter beta : Real
+parameter r : Real
+parameter s : Real
+parameter t : Real
+parameter u : Real
+parameter V : Real
+parameter sigma : Real
+parameter A : Math
+parameter primes : Math
+
+// The paper uses s both for a secret vector and a Gaussian width. Bold s is the secret here.
+assume input_lwe : $\mathbf{t}=U^{T}\mathbf{s}+\mathbf{e}\pmod{q}$
+assume lattice_matrix : $A=\begin{bmatrix}2p_1\mathbf{t}&U^{T}&I_m\end{bmatrix}$
+assume planted_secret : $\mathbf{s}_{[1,\kappa-1]}=(p_2,\ldots,p_{\kappa})$
+assume shortest_vector : $\mathbf{b}=(-1,2p_1\mathbf{s}^{T},2p_1\mathbf{e}^{T})^{T}$
+assume scaled_lattice : $L=D\mathcal{L}_{q}^{\perp}(A)\land\mathbf{x}=D\mathbf{b}$
+assume guessed_norm : $u^{2}=\norm{\mathbf{x}}^{2}$
+assume dimensions : $n=1+m+\ell\land 2\le\kappa\le\ell+1$
+assume encoding : $2^{w}>DMPq\prod_{j=1}^{\kappa}p_j$
+assume condition_one : $t^{2}=cu^{2}\land c\in4\mathbb{Z}\land64\log^{3}(n)<t/u<65\log^{3}(n)$
+assume condition_two : $M=2(t^{2}+u^{2})\land P=M(t^{2}+u^{2})$
+assume condition_three : $M=2D^{2}\prod_{j=1}^{\kappa}p_j\land\prod_{j=2}^{\kappa}p_j\equiv-1\pmod{p_1}$
+assume odd_coprime : $\operatorname{OddPairwiseCoprime}(D,p_1,\ldots,p_{\kappa})$
+assume condition_four : $2r\log(n)\le P\land2r\log(n)<Dq/(\log(n))^{2}$
+assume condition_five : $\frac{s^{2}r^{4}}{u^{2}(s^{4}+r^{4})}\frac{t^{2}}{(t^{2}+u^{2})^{2}}=2$
+assume condition_six : $V=\frac{Pu\sqrt{r^{4}+s^{4}}}{rs^{2}t}\land\sigma=P/V\land2\log(n)<\sigma<D/(4\log(n))$
+assume condition_seven : $\frac{2ut^{2}}{r}<\frac{1}{4\beta\sqrt{n}(\log(n))^{2}}$
+assume condition_eight : $M/2>4\norm{\mathbf{b}}\sigma\sqrt{n}\log(n)\land M/r\in O(1/n)$
+assume lattice_gap : $\lambda_1(L)=\norm{\mathbf{x}}\land\lambda_2^{\infty}(L)>r\log(n)$
+
+// All oracle declarations are opaque source-level operations, not gate implementations.
+oracle lattice_superposition(out : Qubit[n*w], matrix : Math)
+oracle complex_gaussian(out : Qubit[n*w], coefficient : Complex, radius : Real)
+oracle add_vector_mod(control : Qubit[n*w], target : Qubit[n*w], modulus : Nat)
+oracle shift_vector_mod(target : Qubit[n*w], displacement : Math, modulus : Nat)
+oracle reencode_small_support(target : Qubit[n*w], oldmod : Nat, newmod : Nat)
+oracle qft_vector(target : Qubit[n*w], modulus : Nat)
+oracle split_quotient_remainder(target : Qubit[n*w], low : Qubit[n*w], radix : Nat)
+oracle round_to_D_lattice(target : Qubit[n*w], center : Qubit[n*w], spacing : Nat, modulus : Nat)
+oracle domain_extend_all(target : Qubit[n*w], oldmod : Nat, newmod : Nat)
+oracle divide_all_on_support(target : Qubit[n*w], divisor : Nat, oldmod : Nat)
+oracle phase_first_square(target : Qubit[n*w], denominator : Nat)
+oracle copy_first_residue(target : Qubit[n*w], residue : Qubit[w], modulus : Nat)
+oracle crt_split_parity(target : Qubit[n*w], parity : Qubit[n], modulus : Nat)
+oracle crt_split_planted(target : Qubit[n*w], slots : Qubit[kappa*kappa*w], factors : Math)
+oracle copy_diagonal_residues(slots : Qubit[kappa*kappa*w], out : Qubit[kappa*w], factors : Math)
+oracle swap_crt_slot(slots : Qubit[kappa*kappa*w], row : Nat)
+oracle crt_join_planted(target : Qubit[n*w], slots : Qubit[kappa*kappa*w], factors : Math)
+oracle shift_first_mod(target : Qubit[n*w], displacement : Math, modulus : Nat)
+oracle domain_extend_first(target : Qubit[n*w], oldmod : Nat, newmod : Nat)
+oracle divide_first_on_support(target : Qubit[n*w], divisor : Nat, oldmod : Nat)
+classical reconstruct_first_shift(residue : Math, diagonal : Math, factors : Math) -> Math
+classical append_equation(system : Math, equation : Math) -> Math
+classical gaussian_elimination(system : Math, factors : Math) -> Math
+
+spec lattice_superposition {
+  requires $\ket{\psi}=\ket{0}^{\otimes nw}$
+  ensures $\ket{\psi}\propto\sum_{\mathbf{v}\in L\cap\mathbb{Z}_{Dq}^{n}}\ket{\mathbf{v}}$
+}
+spec complex_gaussian {
+  requires $\operatorname{Re}(a)>0$
+  ensures $\ket{\psi}\propto\sum_{\mathbf{y}\in\mathbb{Z}^{n}\cap RB_{\infty}^{n}}\exp(-\pi a\norm{\mathbf{y}}^{2})\ket{\mathbf{y}}$
+}
+spec qft_vector {
+  requires $\ket{\psi}=\ket{\mathbf{z}}\land\mathbf{z}\in\mathbb{Z}_{Q}^{n}$
+  ensures $\ket{\psi}=\frac{1}{Q^{n/2}}\sum_{\mathbf{h}\in\mathbb{Z}_{Q}^{n}}\exp(-2\pi i\ip{\mathbf{z}}{\mathbf{h}}/Q)\ket{\mathbf{h}}$
+}
+spec domain_extend_first {
+  requires $Q\mid R\land\ket{\psi}=\sum_{a=0}^{Q-1}\sum_{b\in B}\alpha_{a,b}\ket{a}\ket{b}$
+  ensures $\ket{\psi}=\sqrt{Q/R}\sum_{a=0}^{R-1}\sum_{b\in B}\alpha_{a\bmod Q,b}\ket{a}\ket{b}$
+}
+
+// Steps 1-7: operations and conditional state assertions from Sections 3.5.1-3.5.7.
+algorithm prepare_imaginary_gaussian(work : Qubit[n*w], center : Qubit[n*w]) {
+  // Step 1, equations (16)-(17): lattice state, Gaussian, addition, measurement, shift.
+  call lattice_superposition(work, A)
+  allocate gaussian : Qubit[n*w]
+  call complex_gaussian(gaussian, $1/r^{2}+i/s^{2}$, $r\log(n)$)
+  call add_vector_mod(work, gaussian, D*q)
+  measure gaussian -> ybits
+  let yprime : Math := $\operatorname{decode}(\mathsf{ybits})$
+  call shift_vector_mod(work, $-\mathsf{yprime}$, D*q)
+  assert $\ket{\phi_1}\propto\sum_{k\in\mathbb{Z},k\mathbf{x}-\mathbf{y}\in(r\log(n))B_{\infty}^{n}}\exp(-\pi(1/r^{2}+i/s^{2})\norm{k\mathbf{x}-\mathbf{y}}^{2})\ket{k\mathbf{x}-\mathbf{y}}$
+  call reencode_small_support(work, D*q, P)
+  discard gaussian
+
+  // Step 2, equation (18). The Fourier sign follows the source, not the gallery QFT convention.
+  call qft_vector(work, P)
+  assert $\ket{\phi_2}=\operatorname{QFT}_{\mathbb{Z}_{P}^{n}}\ket{\phi_1}$
+
+  // Step 3, equations (19)-(21): a second complex Gaussian window.
+  allocate window : Qubit[n*w]
+  call complex_gaussian(window, $\frac{t^{2}r^{2}s^{2}(s^{2}-r^{2}i)}{P^{2}u^{2}(s^{4}+r^{4})}$, $V\log(n)$)
+  call add_vector_mod(work, window, P)
+  measure window -> zbits
+  let zprime : Math := $\operatorname{decode}(\mathsf{zbits})$
+  assert $\ket{\phi_3}\propto\sum_{\mathbf{z}\in\mathbb{Z}_{P}^{n}}f_2(\mathbf{z})\exp(-\pi\frac{t^{2}r^{2}s^{2}(s^{2}-r^{2}i)}{P^{2}u^{2}(s^{4}+r^{4})}\norm{\mathbf{z}-\mathbf{z}^{\prime}\bmod P}^{2})\ket{\mathbf{z}}$
+  discard window
+
+  // Step 4, equation (24).
+  call qft_vector(work, P)
+  assert $\ket{\phi_4}=\operatorname{QFT}_{\mathbb{Z}_{P}^{n}}\ket{\phi_3}$
+
+  // Step 5, equation (25): h = h' (t^2+u^2) + h''; measure only h''.
+  allocate low : Qubit[n*w]
+  call split_quotient_remainder(work, low, $t^{2}+u^{2}$)
+  measure low -> hbits
+  let hstar : Math := $\operatorname{decode}(\mathsf{hbits})$
+  assert $\ket{\phi_5}\propto\sum_{\mathbf{h}\in\mathbb{Z}_{M}^{n}}f_4((t^{2}+u^{2})\mathbf{h}+\mathbf{h}^{*})\ket{\mathbf{h}}$
+  discard low
+
+  // Step 6, equations (26)-(30): the Karst-wave Fourier state.
+  call qft_vector(work, M)
+  assert $\ket{\phi_6}=\operatorname{QFT}_{\mathbb{Z}_{M}^{n}}\ket{\phi_5}$
+
+  // Step 7, equations (31)-(35): shift, compute centers, subtract, measure residual.
+  call shift_vector_mod(work, $\mathsf{zprime}+\mathsf{hstar}-\mathsf{yprime}$, M)
+  call round_to_D_lattice(work, center, D, M)
+  adjoint call add_vector_mod(center, work, M)
+  measure work -> residual
+  assert $\ket{\phi_7}\propto\sum_{\mathbf{k}\in\{0\}\times\mathbb{Z}^{n-1}}\sum_{j\in\mathbb{Z}}\exp(-2\pi i(2Dj)^{2}/(2M))\exp(2\pi i\norm{\mathbf{k}}^{2}/4)\ket{2Dj\mathbf{x}+\mathbf{v}^{\prime}+M\mathbf{k}/2\bmod M}$
+}
+
+// Step 8, Lemma 3.13: four reversible operations, a deterministic-residue measurement,
+// then reversal. The scratch encoding and the division isometry remain external.
+algorithm extract_shift_residue(work : Qubit[n*w], residue : Qubit[w]) -> Math {
+  call domain_extend_all(work, M, D*M)
+  call divide_all_on_support(work, D, D*M)
+  call phase_first_square(work, 2*M)
+  call qft_vector(work, M)
+  call copy_first_residue(work, residue, $Dp_1$)
+  measure residue -> shiftbits
+  assert $w_1^{\prime}=v_1^{\prime}/D\bmod Dp_1$
+  adjoint call qft_vector(work, M)
+  adjoint call phase_first_square(work, 2*M)
+  adjoint call divide_all_on_support(work, D, D*M)
+  adjoint call domain_extend_all(work, M, D*M)
+  assert $\ket{\phi_8}=\ket{\phi_7}$
+  return $D\operatorname{decode}(\mathsf{shiftbits})$
+}
+
+// Step 9 is deliberately retained as a DISPUTED source claim, not repaired or certified.
+algorithm disputed_equation_extraction(work : Qubit[n*w], knownshift : Math) -> Math {
+  allocate parity : Qubit[n]
+  call crt_split_parity(work, parity, M)
+  measure parity -> paritybits
+  discard parity
+  assert $\ket{\phi_{8b}}\propto\sum_{j\in\mathbb{Z}}\exp(-2\pi i(2Dj)^{2}/(2M))\ket{2D^{2}j\mathbf{b}+\mathbf{v}^{\prime}\bmod M/2}$
+  allocate slots : Qubit[kappa*kappa*w]
+  allocate diagonal : Qubit[kappa*w]
+  call crt_split_planted(work, slots, primes)
+  call copy_diagonal_residues(slots, diagonal, primes)
+  measure diagonal -> diagonalbits
+  repeat eta in 2..kappa+1 {
+    call swap_crt_slot(slots, eta)
+  }
+  call crt_join_planted(work, slots, primes)
+  let firstshift : Math := call reconstruct_first_shift(knownshift, $\operatorname{decode}(\mathsf{diagonalbits})$, primes)
+  call shift_first_mod(work, $-\mathsf{firstshift}$, M/2)
+  assert $\ket{\phi_{8f}}\propto\sum_{j\in\mathbb{Z}}\exp(-2\pi i(2Dj)^{2}/(2M))\ket{2D^{2}j\mathbf{b}^{*}+(0,\mathbf{v}^{*}_{[2,n]})\bmod M/2}$
+
+  // The disputed equality is precisely the claimed 8f -> 8g transition in Section 3.5.9.
+  call domain_extend_first(work, M/2, $\frac{M}{2}\prod_{h=2}^{\kappa}p_h$)
+  assert $\ket{\phi_{8g}}\propto\sum_{j\in\mathbb{Z}}\exp(-2\pi i(2Dj)^{2}/(2M))\ket{2D^{2}jb_1^{*}\bmod(\frac{M}{2}\prod_{h=2}^{\kappa}p_h)}\ket{2D^{2}j\mathbf{b}^{*}_{[2,n]}+\mathbf{v}^{*}_{[2,n]}\bmod M/2}$
+  call divide_first_on_support(work, $\prod_{h=2}^{\kappa}p_h$, $\frac{M}{2}\prod_{h=2}^{\kappa}p_h$)
+  call phase_first_square(work, $2D^{2}M$)
+  call qft_vector(work, M/2)
+  measure work -> ubits
+  assert $u_1+\ip{\mathbf{b}^{*}_{[2,n]}}{\mathbf{u}_{[2,n]}}\equiv0\pmod{\prod_{h=1}^{\kappa}p_h}$
+  discard slots
+  discard diagonal
+  return $\operatorname{decode}(\mathsf{ubits})$
+}
+
+algorithm chen_nine_stages(work : Qubit[n*w], center : Qubit[n*w], residue : Qubit[w]) -> Math {
+  call prepare_imaginary_gaussian(work, center)
+  let shift : Math := call extract_shift_residue(center, residue)
+  let equation : Math := call disputed_equation_extraction(center, shift)
+  return $\mathsf{equation}$
+}
+
+// Section 3.4: collect the alleged modular equations and apply Gaussian elimination.
+// The sample budget is explicit; no rank, success or polynomial-time claim is accepted.
+algorithm recover_from_claimed_equations(samples : Nat) -> Math {
+  var equations : Math := $\emptyset$
+  repeat sample in 0..samples {
+    allocate work : Qubit[n*w]
+    allocate center : Qubit[n*w]
+    allocate residue : Qubit[w]
+    let equation : Math := call chen_nine_stages(work, center, residue)
+    set equations := call append_equation(equations, equation)
+    discard work
+    discard center
+    discard residue
+  }
+  let candidate : Math := call gaussian_elimination(equations, primes)
+  return $\mathsf{candidate}$
+}
+
+spec recover_from_claimed_equations {
+  requires $\operatorname{Conditions}_{3.3}(A,D,P,M,r,s,t,u)$
+  ensures $\operatorname{claimUnderAudit}(\hat{\mathbf{s}}=\mathbf{s}\land\hat{\mathbf{e}}=\mathbf{e})$
+  costs $T=\mathsf{samples}\,T_{\mathrm{nine}}+T_{\mathrm{elimination}}$
+}
+
+spec chen_nine_stages {
+  requires $\ket{\psi}=\ket{0}^{\otimes(2nw+w)}\land\operatorname{Conditions}_{3.3}(A,D,P,M,r,s,t,u)$
+  ensures $\operatorname{claimUnderAudit}(u_1+\ip{\mathbf{b}^{*}_{[2,n]}}{\mathbf{u}_{[2,n]}}\equiv0\pmod{\prod_{h=1}^{\kappa}p_h})$
+  costs $\operatorname{claimUnderAudit}(T\in\operatorname{poly}(n))$
+}
+
+proof chen_nine_stages {
+  goal $\operatorname{ExtendFirst}(\ket{\phi_{8f}})=\ket{\phi_{8g}}$
+  admit "DISPUTED AND WITHDRAWN: the April 18 author update identifies Step 9 as erroneous. This is an audit input containing the claimed transition, not a theorem or a working LWE solver."
+  admit "The source's sums over all integers denote periodic unnormalized state expressions. A finite representative set, normalization and truncation proof remain obligations; QParam currently only parses these expressions."
+  admit "All oracle bodies, register encodings, clean scratch behavior, approximation errors and resource bounds remain unimplemented. The assumed norm guess and parameter constraints have not been established."
+}

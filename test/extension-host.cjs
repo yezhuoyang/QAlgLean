@@ -12,6 +12,14 @@ exports.run = async () => {
   const extension = vscode.extensions.getExtension('yezhuoyang.qparam-studio');
   assert.ok(extension, 'extension discovered');
   const api = await extension.activate();
+  const gallery = await api.getExamples();
+  assert.ok(gallery.some(e => e.file === 'literature/chen-nine-stages.qp'), 'literature subdirectory in gallery');
+  assert.ok(gallery.some(e => e.file === 'literature/regev-lattice-sampling.qp'), 'advanced factoring in gallery');
+  assert.equal(new Set(gallery.map(e => e.file)).size, gallery.length, 'one gallery item per source');
+  for (const example of gallery) {
+    const data = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(extension.extensionUri, 'examples', example.file));
+    assert.deepEqual(api.parseDocument(Buffer.from(data).toString('utf8')).diagnostics, [], example.file);
+  }
   const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(extension.extensionUri, 'examples/bell.qp'));
   const document = await vscode.workspace.openTextDocument({ language: 'qparam', content: Buffer.from(bytes).toString('utf8') });
   const editor = await vscode.window.showTextDocument(document);

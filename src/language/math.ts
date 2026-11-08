@@ -8,6 +8,7 @@ import {
 export type MathNode =
   | { kind: 'number' | 'identifier' | 'operator' | 'text'; value: string; start: number; end: number }
   | { kind: 'unary'; operator: string; operand: MathNode; start: number; end: number }
+  | { kind: 'postfix'; operator: 'factorial' | 'double-factorial' | 'prime'; operand: MathNode; start: number; end: number }
   | { kind: 'binary'; operator: string; left: MathNode; right: MathNode; start: number; end: number }
   | { kind: 'script'; base: MathNode; subscript?: MathNode; superscript?: MathNode; start: number; end: number }
   | { kind: 'group'; delimiter: string; elements: MathNode[]; start: number; end: number }
@@ -119,7 +120,7 @@ function tokenize(source: string): Token[] {
     if (['<=', '>=', '!=', '->', '=>'].includes(pair)) {
       i += 2; tokens.push({ kind: 'symbol', value: pair, start, end: i }); continue;
     }
-    if ('{}()[]_^+-*/=<>:,&'.includes(source[i])) {
+    if ("{}()[]_^+-*/=<>:,&!'".includes(source[i])) {
       tokens.push({ kind: 'symbol', value: source[i++], start, end: i }); continue;
     }
     const visibleDelimiters: Record<string, string> = { '|': 'bar', '‖': 'norm-bar', '⟨': 'angle-open', '⟩': 'angle-close', '⌊': 'floor-open', '⌋': 'floor-close', '⌈': 'ceil-open', '⌉': 'ceil-close' };
@@ -188,7 +189,21 @@ class Parser {
     let left = this.atom();
     while (true) {
       const token = this.peek();
-      if (token.value === '(' && ['identifier', 'operator', 'style', 'accent', 'script', 'application'].includes(left.kind) && min <= 65) {
+      if ((token.value === '!' || token.value === "'") && min <= 75) {
+        if (token.value === "'" && left.kind === 'script' && left.superscript) {
+          throw new MathSyntaxError("A prime after an existing superscript needs parentheses, as in (x^2)', or belongs inside the exponent, as in x^{2\\prime}.", token.start);
+        }
+        this.take();
+        let operator: 'factorial' | 'double-factorial' | 'prime' = token.value === '!' ? 'factorial' : 'prime';
+        let end = token.end;
+        if (token.value === '!' && this.peek().value === '!') {
+          operator = 'double-factorial'; end = this.take().end;
+          if (this.peek().value === '!') throw new MathSyntaxError('Use parentheses to distinguish iterated factorials; only ! and !! are supported.', this.peek().start);
+        }
+        left = { kind: 'postfix', operator, operand: left, start: left.start, end };
+        continue;
+      }
+      if (token.value === '(' && (['identifier', 'operator', 'style', 'accent', 'script', 'application'].includes(left.kind) || (left.kind === 'postfix' && left.operator === 'prime')) && min <= 65) {
         const argument = this.group();
         left = { kind: 'application', function: left, argument, start: left.start, end: argument.end };
         continue;
@@ -233,6 +248,10 @@ class Parser {
     if (token.kind === 'name' || token.kind === 'number' || (token.kind === 'command' && (identifiers.has(token.value) || token.value === 'perp'))) {
       this.take();
       return { kind: token.kind === 'number' ? 'number' : 'identifier', value: token.kind === 'command' ? `\\${token.value}` : token.value, start: token.start, end: token.end };
+    }
+    if (token.value === '*') {
+      this.take();
+      return { kind: 'identifier', value: '*', start: token.start, end: token.end };
     }
     throw new MathSyntaxError('Expected a script value; use braces for a compound subscript or exponent.', token.start);
   }
@@ -304,6 +323,9 @@ class Parser {
     if (Object.hasOwn(closingDelimiters, token.value)) return this.group();
     if (token.value.startsWith('begin:')) return this.table();
     this.take();
+    if (this.scriptDepth && token.value === '*' && ['}', ','].includes(this.peek().value)) {
+      return { kind: 'identifier', value: '*', start: token.start, end: token.end };
+    }
     if (token.kind === 'number' || token.kind === 'name') return { kind: token.kind === 'name' ? 'identifier' : 'number', value: token.value, start: token.start, end: token.end };
     if (token.kind === 'operator' || token.kind === 'text') return { kind: token.kind, value: token.value, start: token.start, end: token.end };
     if (token.value === '+' || token.value === '-') {

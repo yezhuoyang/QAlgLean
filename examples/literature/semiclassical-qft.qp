@@ -1,0 +1,34 @@
+qparam SemiclassicalFourierTransform
+title "A Fourier measurement with classical feedback"
+description "Griffiths and Niu, quant-ph/9511007v1, Eqs. (1), (10), (11) and Fig. 2. Input q[0] is the most significant bit; measurements produce output bits least significant first. This implements measurement after the positive QFT, not a reusable coherent QFT."
+
+parameter n : Nat
+assume width : $n\ge1$
+state fourier := $F\ket{x}=\frac{1}{\sqrt{2^n}}\sum_{z=0}^{2^n-1}\exp(2\pi ixz/2^n)\ket{z}$
+
+algorithm sample_fourier(q : Qubit[n]) -> Nat {
+  var p : Real := $0$
+  var y : Nat := $0$
+  repeat j in 0..n {
+    invariant $0\le p<1/2\land0\le y<2^j$
+    Phase($2\pi p$, q[j])
+    H(q[j])
+    measure q[j] -> b
+    assert $b\in\{0,1\}$
+    set y := $y+b2^j$
+    set p := $p/2+b/4$
+  }
+  return $y$
+}
+
+spec sample_fourier {
+  requires $\ket{\Psi_0}=\ket{\psi}\land\norm{\ket{\psi}}=1$
+  ensures $0\le y<2^n$
+  probability $\forall z\in\{0,\ldots,2^n-1\},\Pr[y=z]=\abs{\bra{z}F\ket{\psi}}^2$
+  costs $G_H=n\land G_{\mathrm{Phase}}=n\land G_{\mathrm{twoqubit}}=0\land M=n$
+}
+
+proof sample_fourier {
+  goal $\forall z\in\{0,\ldots,2^n-1\},\Pr[y=z]=\abs{\bra{z}F\ket{\psi}}^2$
+  admit "Prove equality of measurement distributions using deferred measurement, including entangled input amplitudes and the MSB-input/LSB-output convention. Counts include the first identity phase call. The result is classical and cannot replace a coherent QFT subroutine."
+}

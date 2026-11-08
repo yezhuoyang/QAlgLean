@@ -72,8 +72,8 @@ const formulas = StateField.define<DecorationSet>({
   provide: field => EditorView.decorations.from(field),
 });
 
-const keywords = new Set('qparam title description parameter assume state oracle algorithm spec proof requires ensures costs probability goal admit by lean repeat in measure call controlled adjoint'.split(' '));
-const types = new Set('Qubit Nat Int Real Complex Bool'.split(' '));
+const keywords = new Set('qparam title description parameter assume state oracle classical algorithm spec proof requires ensures costs probability goal admit by lean repeat in measure call controlled adjoint let var set if else while return allocate discard assert invariant'.split(' '));
+const types = new Set('Qubit Nat Int Real Complex Bool Bit Math'.split(' '));
 const gates = new Set('H X Y Z S T CX CZ SWAP CCX Rx Ry Rz Phase reset'.split(' '));
 const qparamLanguage = StreamLanguage.define({
   startState: () => ({ math: false }),

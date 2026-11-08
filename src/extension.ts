@@ -24,7 +24,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   function parse(doc: vscode.TextDocument): QDocument {
     if (doc.getText().length > 500_000) {
-      return { name: 'Document', title: 'Document size limit', description: '', sections: [], program: { algorithms: [], oracles: [] }, diagnostics: [
+      return { name: 'Document', title: 'Document size limit', description: '', sections: [], program: { algorithms: [], oracles: [], classicals: [] }, diagnostics: [
         { line: 0, column: 0, length: 1, severity: 'error', message: 'The interactive frontend supports documents up to 500,000 characters.' }
       ] };
     }
@@ -88,6 +88,24 @@ export function activate(context: vscode.ExtensionContext) {
     update(source);
   }
 
+  async function getExamples() {
+    const result: (vscode.QuickPickItem & { file: string })[] = [];
+    async function visit(relative: string) {
+      const directory = vscode.Uri.joinPath(context.extensionUri, 'examples', relative);
+      for (const [name, kind] of await vscode.workspace.fs.readDirectory(directory)) {
+        const file = relative ? relative + '/' + name : name;
+        if (kind === vscode.FileType.Directory) await visit(file);
+        else if (kind === vscode.FileType.File && name.endsWith('.qp')) {
+          const content = new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.joinPath(directory, name)));
+          const doc = parseDocument(content);
+          result.push({ label: doc.title || doc.name, description: file, detail: doc.description, file });
+        }
+      }
+    }
+    await visit('');
+    return result.sort((a, b) => a.file.localeCompare(b.file));
+  }
+
   context.subscriptions.push(
     vscode.commands.registerCommand('qparam.openMathEditor', async () => {
       const doc = mathEditors.activeDocument || vscode.window.activeTextEditor?.document;
@@ -95,17 +113,9 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand('qparam.openPreview', () => openPreview()),
     vscode.commands.registerCommand('qparam.openExample', async () => {
-      const selected = await vscode.window.showQuickPick([
-        { label: 'Bell pair', description: 'States, gates, tensor products, and a specification', file: 'bell.qp' },
-        { label: 'Fourier state notebook', description: 'Indexed superpositions and uniform preparation', file: 'fourier.qp' },
-        { label: 'Deutsch–Jozsa', description: 'One-query circuit and promise specification', file: 'deutsch-jozsa.qp' },
-        { label: 'Bernstein–Vazirani', description: 'Parity oracle and hidden-string recovery', file: 'bernstein-vazirani.qp' },
-        { label: 'Grover search', description: 'Parametric iterations and a gate-level diffuser', file: 'grover.qp' },
-        { label: 'Quantum Fourier transform', description: 'Controlled phases, bit reversal, and adjoint calls', file: 'qft.qp' },
-        { label: 'Shor order finding', description: 'Circuit skeleton with explicit arithmetic oracles', file: 'shor-order-finding.qp' },
-        { label: 'Hamiltonian simulation / block encoding', description: 'Operator contracts and approximation obligations', file: 'hamiltonian-block-encoding.qp' },
-        { label: 'LWE research obligations', description: 'Lattices and open obligations; no claimed implementation', file: 'lwe-obligations.qp' }
-      ], { title: 'Your first QParam research document' });
+      const selected = await vscode.window.showQuickPick(await getExamples(), {
+        title: 'QParam examples and literature corpus', matchOnDescription: true, matchOnDetail: true
+      });
       if (!selected) return;
       const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(context.extensionUri, 'examples', selected.file));
       const doc = await vscode.workspace.openTextDocument({ language: 'qparam', content: new TextDecoder().decode(bytes) });
@@ -211,7 +221,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
   vscode.workspace.textDocuments.forEach(update);
   // A small inspection surface for extension-host integration tests; no proof engine is implied.
-  return { parseDocument, diagnostics, getPreviewDocument: () => previewDocument?.uri.toString(),
+  return { parseDocument, diagnostics, getExamples, getPreviewDocument: () => previewDocument?.uri.toString(),
     getMathEditorDocuments: () => mathEditors.documents,
     preserveMathDraft: (doc: vscode.TextDocument, value: unknown) => mathEditors.preserveDraft(doc, value),
     getMathDraft: (doc: vscode.TextDocument) => mathEditors.getRecoveryDraft(doc),

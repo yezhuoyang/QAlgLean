@@ -1,6 +1,7 @@
 import { QDocument } from '../language/document';
 import { latexMathPreamble } from '../language/math-syntax';
 import { toMathLatex } from '../language/math';
+import { mathSpans, programLines } from './spans';
 
 /** Text is escaped separately from the deliberately restricted mathematical fragment. */
 export function escapeLatex(text: string): string {
@@ -26,9 +27,17 @@ export function exportLatex(doc: QDocument): string {
   ];
   for (const section of doc.sections) {
     lines.push(`\\subsection*{${escapeLatex(section.kind)}: ${escapeLatex(section.name)}}`);
-    if (section.kind === 'algorithm') {
-      for (const sourceLine of section.source.split(/\r?\n/)) {
-        lines.push(`\\noindent\\texttt{${escapeLatex(sourceLine).replace(/^ +/, spaces => '\\hspace*{' + spaces.length * 0.5 + 'em}')}}\\par`);
+    if (['algorithm', 'oracle', 'classical'].includes(section.kind)) {
+      for (const { source } of programLines(section.source)) {
+        let cursor = 0;
+        const parts: string[] = [];
+        const text = (value: string) => `\\texttt{${escapeLatex(value).replace(/^ +/, spaces => '\\hspace*{' + spaces.length * 0.5 + 'em}')}}`;
+        for (const span of mathSpans(source)) {
+          parts.push(text(source.slice(cursor, span.from)), `\\(\\displaystyle ${toMathLatex(span.latex)}\\)`);
+          cursor = span.to;
+        }
+        parts.push(text(source.slice(cursor)));
+        lines.push(`\\noindent ${parts.join('')}\\par\\smallskip`);
       }
       continue;
     }

@@ -2,6 +2,7 @@ import * as katex from 'katex';
 import { QDocument } from '../language/document';
 import { mathMacros } from '../language/math-syntax';
 import { toMathLatex } from '../language/math';
+import { programLines } from '../editor/spans';
 
 export interface PreviewOptions {
   katexCssUri: string;
@@ -18,7 +19,7 @@ interface Group { kind: string; name: string; sections: Section[] }
 
 const kindNames: Record<string, string> = {
   parameter: 'Parameters', assumption: 'Assumptions', state: 'Quantum states',
-  oracle: 'Oracle interface', algorithm: 'Algorithm', spec: 'Specification', proof: 'Proof',
+  oracle: 'Oracle interface', classical: 'Classical interface', algorithm: 'Algorithm', spec: 'Specification', proof: 'Proof',
 };
 
 /** All source content crosses this escaping boundary before entering HTML. */
@@ -81,7 +82,7 @@ function groupsFor(sections: Section[]): Group[] {
 }
 
 function renderCode(source: string): string {
-  const tokens = /(\/\/[^\r\n]*|\$[^$\r\n]*\$|\b(?:oracle|algorithm|apply|prepare|measure|return|repeat|for|in|let|if|else|allocate|discard|control|controlled|adjoint|call|end)\b|\b(?:H|X|Y|Z|S|T|CX|CZ|CNOT|CCX|SWAP|QFT|Rz|Ry|Rx|reset)\b|\b\d+\b|\b(?:Qubit|QReg|Nat|Real|Complex|Bool)\b)/g;
+  const tokens = /(\/\/[^\r\n]*|\$[^$]*\$|\b(?:oracle|classical|algorithm|measure|return|repeat|in|let|var|set|if|else|while|allocate|discard|assert|invariant|controlled|adjoint|call)\b|\b(?:H|X|Y|Z|S|T|CX|CZ|CCX|SWAP|Phase|Rz|Ry|Rx|reset)\b|\b\d+\b|\b(?:Qubit|Nat|Int|Real|Complex|Bool|Bit|Math)\b)/g;
   let last = 0;
   let html = '';
   for (const match of source.matchAll(tokens)) {
@@ -90,8 +91,8 @@ function renderCode(source: string): string {
     if (token.startsWith('$')) html += `<span class="code-math">${renderMath(token.slice(1, -1), false)}</span>`;
     else {
       const kind = /^\/\//.test(token) ? 'comment' : /^\d/.test(token) ? 'number'
-        : /^(H|X|Y|Z|S|T|CX|CZ|CNOT|CCX|SWAP|QFT|Rz|Ry|Rx|reset)$/.test(token) ? 'gate'
-        : /^(Qubit|QReg|Nat|Real|Complex|Bool)$/.test(token) ? 'type' : 'keyword';
+        : /^(H|X|Y|Z|S|T|CX|CZ|CCX|SWAP|Phase|Rz|Ry|Rx|reset)$/.test(token) ? 'gate'
+        : /^(Qubit|Nat|Int|Real|Complex|Bool|Bit|Math)$/.test(token) ? 'type' : 'keyword';
       html += `<span class="token-${kind}">${escapeHtml(token)}</span>`;
     }
     last = (match.index ?? 0) + token.length;
@@ -123,8 +124,8 @@ function renderItem(item: Item, section: Section): string {
 }
 
 function renderGroup(group: Group, index: number): string {
-  const items = group.sections.flatMap(section => section.kind === 'algorithm' || section.kind === 'oracle'
-    ? section.source.split(/\r?\n/).map((source, lineIndex) => {
+  const items = group.sections.flatMap(section => ['algorithm', 'oracle', 'classical'].includes(section.kind)
+    ? programLines(section.source).map(({ source, line: lineIndex }) => {
       const line = section.line + lineIndex;
       return `<div class="program-line" data-line="${line}"><button class="line-number" data-action="reveal" data-line="${line}" aria-label="View source, line ${line + 1}">${line + 1}</button><code>${renderCode(source)}</code></div>`;
     })
@@ -134,7 +135,7 @@ function renderGroup(group: Group, index: number): string {
   const firstSection = group.sections[0];
   return `<section class="document-section kind-${escapeHtml(group.kind)}" id="section-${index}" data-line="${firstSection.line}" aria-labelledby="heading-${index}">
     <div class="section-heading"><h2 id="heading-${index}">${isNamed ? `<span class="section-kind">${escapeHtml(label)} </span>` : ''}${escapeHtml(group.name)}</h2>${sourceButton(firstSection.line)}</div>
-    <div class="section-body${group.kind === 'parameter' ? ' parameter-grid' : ''}${group.kind === 'algorithm' || group.kind === 'oracle' ? ' program' : ''}">${items.join('') || '<p class="empty-section">No statements.</p>'}</div>
+    <div class="section-body${group.kind === 'parameter' ? ' parameter-grid' : ''}${['algorithm', 'oracle', 'classical'].includes(group.kind) ? ' program' : ''}">${items.join('') || '<p class="empty-section">No statements.</p>'}</div>
   </section>`;
 }
 

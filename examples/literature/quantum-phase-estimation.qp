@@ -1,0 +1,52 @@
+qparam QuantumPhaseEstimation
+title "Phase estimation with explicit controlled powers"
+description "Cleve, Ekert, Macchiavello and Mosca, quant-ph/9708016v1, Section 5, Figs. 5-6 and Eqs. (5.1)-(5.4). clock[0] is the most significant bit. Powers are implemented by repeated calls, so the access model charges 2^m-1 controlled-U queries."
+
+parameter n : Nat
+parameter m : Nat
+parameter phi : Real
+assume widths : $n\ge1\land m\ge1$
+assume phase_range : $0\le\phi<1$
+assume eigenpair : $U^{\dagger}U=I\land U\ket{u}=\exp(2\pi i\phi)\ket{u}\land\norm{\ket{u}}=1$
+state kicked_back := $\ket{\Phi}=\frac{1}{\sqrt{2^m}}\sum_{x=0}^{2^m-1}\exp(2\pi ix\phi)\ket{x}\otimes\ket{u}$
+state amplitude := $a_k=\frac{1}{2^m}\sum_{x=0}^{2^m-1}\exp(2\pi ix(\phi-k/2^m))$
+
+oracle apply_U(target : Qubit[n])
+oracle inverse_qft(clock : Qubit[m])
+
+spec apply_U {
+  ensures $\operatorname{unitary}(\operatorname{applyU})=U$
+}
+
+spec inverse_qft {
+  requires $0\le x<2^m$
+  ensures $\operatorname{unitary}(\operatorname{inverseQFT})=F^{\dagger}$
+  ensures $F^{\dagger}\ket{x}=\frac{1}{\sqrt{2^m}}\sum_{k=0}^{2^m-1}\exp(-2\pi ixk/2^m)\ket{k}$
+}
+
+algorithm estimate(clock : Qubit[m], target : Qubit[n]) -> Bit[m] {
+  repeat j in 0..m {
+    H(clock[j])
+    repeat k in 0..2^(m-1-j) {
+      controlled(clock[j]) call apply_U(target)
+    }
+  }
+  assert $\ket{\Psi_1}=\ket{\Phi}$
+  call inverse_qft(clock)
+  assert $\ket{\Psi_2}=(\sum_{k=0}^{2^m-1}a_k\ket{k})\otimes\ket{u}$
+  measure clock -> y
+  return $y$
+}
+
+spec estimate {
+  requires $\ket{\Psi_0}=\ket{0^m}\otimes\ket{u}$
+  ensures $\ket{u'}=\ket{u}$
+  probability $\forall k\in\{0,\ldots,2^m-1\},\Pr[\operatorname{value}(y)=k]=\abs{a_k}^2$
+  probability $\forall z\in\{0,\ldots,2^m-1\},\phi=z/2^m\implies\Pr[\operatorname{value}(y)=z]=1$
+  costs $Q_{\mathrm{controlledU}}=2^m-1\land G_H=m\land Q_{F^{\dagger}}=1\land M=m$
+}
+
+proof estimate {
+  goal $\forall z\in\{0,\ldots,2^m-1\},\phi=z/2^m\implies\abs{a_z}^2=1$
+  admit "Prove phase kickback and the finite Fourier sum. inverse_qft is the explicit reusable circuit in examples/qft.qp, represented here by a contract because module imports are not implemented. The value operator decodes an MSB-first bitstring. Preparing the eigenstate and synthesizing U are external obligations."
+}

@@ -89,6 +89,26 @@
     "description": "A control register and an explicitly declared circuit call",
     "body": ["controlled(${1:control}) call ${2:U}(${3:q})$0"]
   },
+  "Classical external subroutine": {
+    "prefix": "qp-classical",
+    "description": "Declare an opaque classical subroutine; its implementation remains external",
+    "body": ["classical ${1:gcd}(${2:a} : Nat, ${3:b} : Nat) -> Nat", "$0"]
+  },
+  "Mathematical conditional": {
+    "prefix": "qp-if",
+    "description": "A classical branch with a typeset mathematical guard",
+    "body": ["if \\$${1:d > 1}\\$ {", "  assert \\$${2:d > 1}\\$", "} else {", "  $0", "}"]
+  },
+  "While loop with invariant": {
+    "prefix": "qp-while",
+    "description": "A loop with an explicit unproved mathematical invariant",
+    "body": ["while \\$${1:k < n}\\$ {", "  invariant \\$${2:0 \\le k \\le n}\\$", "  $0", "}"]
+  },
+  "Mathematical local": {
+    "prefix": "qp-let",
+    "description": "Bind a mathematical expression to an immutable local",
+    "body": ["let ${1:x} : ${2:Math} := \\$${3:0}\\$$0"]
+  },
   "Open proof obligation": {
     "prefix": "qp-proof",
     "description": "State a mathematical goal with a visibly unfinished proof",

@@ -1,0 +1,131 @@
+qparam TruncatedTaylorSimulation
+title "Truncated Taylor simulation with oblivious amplification"
+description "Berry, Childs, Cleve, Kothari and Somma, arXiv:1412.4687v1, Eqs. (3), (7)-(21) and circuit constructions on pages 3-4. This version covers equal segments with alpha t/r = ln(2)."
+
+parameter n : Nat
+parameter b : Nat
+parameter L : Nat
+parameter K : Nat
+parameter r : Nat
+parameter t : Real
+parameter alpha : Real
+parameter delta : Real
+assume sizes : $n\ge1\land b\ge1\land K\ge1\land r\ge1\land 1\le L\le2^b$
+assume positive_coefficients : $\forall j\in\{0,\ldots,L-1\},\alpha_j>0$
+assume coefficient_sum : $\alpha=\sum_{j=0}^{L-1}\alpha_j$
+assume time_grid : $\alpha t/r=\ln(2)$
+assume terms : $\forall j\in\{0,\ldots,L-1\},H_j^{\dagger}H_j=I$
+state hamiltonian := $H=\sum_{j=0}^{L-1}\alpha_j H_j$
+assume hermitian : $H=H^{\dagger}$
+state weight := $w_k=\frac{(\alpha t/r)^k}{k!}$
+state tail := $T_j=\sum_{k=j}^{K}w_k$
+state normalization := $s=T_0$
+state coefficient_state := $\ket{G}=\sum_{j=0}^{L-1}\sqrt{\alpha_j/\alpha}\ket{j}$
+state coefficient_preparation := $C\ket{0^b}=\ket{G}$
+assume preparation_unitary : $C^{\dagger}C=I$
+state selection_extension := $S=\sum_{j=0}^{L-1}\ketbra{j}{j}\otimes H_j+(I-\sum_{j=0}^{L-1}\ketbra{j}{j})\otimes I$
+state taylor := $\widetilde{U}=\sum_{k=0}^{K}\frac{(-iHt/r)^k}{k!}$
+state projector := $P=\ketbra{0^{K(b+1)}}{0^{K(b+1)}}\otimes I$
+assume truncation : $0<\delta<1\land\sum_{k=K+1}^{\infty}\frac{\ln(2)^k}{k!}\le\delta$
+
+oracle prepare_coeff(index : Qubit[b])
+oracle select_term(index : Qubit[b], q : Qubit[n])
+
+spec prepare_coeff {
+  requires $\ket{\eta}=\ket{0^b}$
+  ensures $\ket{\eta'}=\ket{G}$
+  ensures $\operatorname{unitary}(\operatorname{prepareCoeff})=C$
+}
+
+spec select_term {
+  requires $0\le j<L$
+  ensures $\operatorname{SELECT}(\ket{j}\otimes\ket{\psi})=\ket{j}\otimes H_j\ket{\psi}$
+  ensures $\operatorname{unitary}(\operatorname{selectTerm})=S$
+}
+
+algorithm prepare(order : Qubit[K], indices : Qubit[K*b]) {
+  Ry($2\arcsin(\sqrt{T_1/T_0})$, order[0])
+  repeat j in 1..K {
+    controlled(order[j-1]) Ry($2\arcsin(\sqrt{T_{j+1}/T_j})$, order[j])
+  }
+  assert $\ket{\eta}=\sum_{k=0}^{K}\sqrt{w_k/s}\ket{1^k0^{K-k}}$
+  repeat j in 0..K {
+    call prepare_coeff(indices[j*b..(j+1)*b])
+  }
+}
+
+spec prepare {
+  requires $\ket{\eta_0}=\ket{0^{K(b+1)}}$
+  ensures $B\ket{0^{K(b+1)}}=(\sum_{k=0}^{K}\sqrt{w_k/s}\ket{1^k0^{K-k}})\otimes\ket{G}^{\otimes K}$
+  costs $Q_{\mathrm{coeff}}=K\land G_{\mathrm{rotation}}=K$
+}
+
+algorithm select_taylor(order : Qubit[K], indices : Qubit[K*b], q : Qubit[n]) {
+  repeat j in 0..K {
+    controlled(order[K-1-j]) call select_term(indices[(K-1-j)*b..(K-j)*b], q)
+    Phase($-\pi/2$, order[K-1-j])
+  }
+}
+
+spec select_taylor {
+  requires $0\le k\le K$
+  ensures $\operatorname{SELECTV}(\ket{1^k0^{K-k}}\otimes\ket{\ell_1,\ldots,\ell_K}\otimes\ket{\psi})=\ket{1^k0^{K-k}}\otimes\ket{\ell_1,\ldots,\ell_K}\otimes(-i)^k(\prod_{j=1}^{k}H_{\ell_j})\ket{\psi}$
+  costs $Q_{\mathrm{term}}=K$
+}
+
+algorithm block(anc : Qubit[K*(b+1)], q : Qubit[n]) {
+  call prepare(anc[0..K], anc[K..K*(b+1)])
+  call select_taylor(anc[0..K], anc[K..K*(b+1)], q)
+  adjoint call prepare(anc[0..K], anc[K..K*(b+1)])
+  assert $PWP=(\ketbra{0^{K(b+1)}}{0^{K(b+1)}}\otimes\widetilde{U})/s$
+}
+
+algorithm reflect_zero(anc : Qubit[K*(b+1)]) {
+  repeat j in 0..K*(b+1) {
+    X(anc[j])
+  }
+  controlled(anc[0..K*(b+1)-1]) Z(anc[K*(b+1)-1])
+  repeat j in 0..K*(b+1) {
+    X(anc[j])
+  }
+}
+
+spec reflect_zero {
+  ensures $R=I-2\ketbra{0^{K(b+1)}}{0^{K(b+1)}}$
+}
+
+algorithm amplified_segment(anc : Qubit[K*(b+1)], q : Qubit[n]) {
+  call block(anc, q)
+  call reflect_zero(anc)
+  adjoint call block(anc, q)
+  call reflect_zero(anc)
+  call block(anc, q)
+  Rz($2\pi$, q[0])
+  assert $A=-WRW^{\dagger}RW$
+}
+
+spec amplified_segment {
+  requires $\ket{\Psi_0}=\ket{0^{K(b+1)}}\otimes\ket{\psi}$
+  ensures $PA\ket{\Psi_0}=\ket{0^{K(b+1)}}\otimes(\frac{3}{s}\widetilde{U}-\frac{4}{s^3}\widetilde{U}\widetilde{U}^{\dagger}\widetilde{U})\ket{\psi}$
+  costs $Q_{\mathrm{term}}=3K\land Q_{\mathrm{coeff}}=6K$
+}
+
+algorithm simulate(q : Qubit[n]) {
+  repeat j in 0..r {
+    invariant $\norm{\rho_j-\exp(-ijHt/r)\rho_0\exp(ijHt/r)}_1\in\mathcal{O}(j\delta)$
+    allocate anc : Qubit[K*(b+1)]
+    call amplified_segment(anc, q)
+    discard anc
+  }
+}
+
+spec simulate {
+  requires $\rho_0=\ketbra{\psi}{\psi}\land\norm{\ket{\psi}}=1$
+  ensures $\norm{\rho_r-\exp(-itH)\rho_0\exp(itH)}_1\in\mathcal{O}(r\delta)$
+  costs $Q_{\mathrm{term}}=3rK\land Q_{\mathrm{coeff}}=6rK$
+}
+
+proof simulate {
+  goal $\norm{\widetilde{U}-\exp(-iHt/r)}\le\delta\land\abs{s-2}\le\delta$
+  admit "Oblivious amplification is approximate; discard and freshly initialize segment ancillas. Tail-rotation synthesis is a derived PREPARE implementation. Non-grid final segments are outside this file."
+}

@@ -1,0 +1,314 @@
+{
+  "schemaVersion": 1,
+  "status": "syntax-only",
+  "sources": [
+    {
+      "id": "childs-su-tran-wiebe-zhu-2021",
+      "title": "A Theory of Trotter Error",
+      "authors": [
+        "Andrew M. Childs",
+        "Yuan Su",
+        "Minh C. Tran",
+        "Nathan Wiebe",
+        "Shuchen Zhu"
+      ],
+      "year": 2021,
+      "url": "https://arxiv.org/pdf/1912.08854v3",
+      "locator": "Section 5.1, Proposition 15, Eq. (145), and two-term second-order Eq. (150), pages 38-39",
+      "sourceStatus": "fulltext-inspected",
+      "programs": [
+        "examples/literature/hamiltonian-product-formulas.qp"
+      ],
+      "scope": "First- and second-order two-term product formulas; repeated-step bounds derived by telescoping",
+      "accessModel": [
+        "Exact term exponentials evolve_A and evolve_B"
+      ],
+      "limitations": [
+        "No gate synthesis for term exponentials",
+        "No formal verification of error bounds"
+      ]
+    },
+    {
+      "id": "berry-childs-cleve-kothari-somma-2014",
+      "title": "Simulating Hamiltonian dynamics with a truncated Taylor series",
+      "authors": [
+        "Dominic W. Berry",
+        "Andrew M. Childs",
+        "Richard Cleve",
+        "Robin Kothari",
+        "Rolando D. Somma"
+      ],
+      "year": 2014,
+      "url": "https://arxiv.org/pdf/1412.4687v1",
+      "locator": "Eqs. (3), (7)-(21), and Circuit constructions and gate counts, pages 2-4",
+      "sourceStatus": "fulltext-inspected",
+      "programs": [
+        "examples/literature/lcu-taylor.qp"
+      ],
+      "scope": "Unary-order Taylor LCU circuit with robust oblivious amplification and fresh segment ancillas",
+      "accessModel": [
+        "prepare_coeff prepares the normalized positive coefficient state",
+        "select_term coherently selects a term unitary and supports controls and inverse"
+      ],
+      "limitations": [
+        "Equal-length time-grid segments only: alpha t/r = ln(2)",
+        "Tail-probability rotations are an explicit derived implementation",
+        "Coefficient preparation and gate synthesis remain external",
+        "Trace-norm error is an unverified asymptotic obligation"
+      ]
+    },
+    {
+      "id": "gilyen-su-low-wiebe-2018",
+      "title": "Quantum singular value transformation and beyond: exponential improvements for quantum matrix arithmetics",
+      "authors": [
+        "Andras Gilyen",
+        "Yuan Su",
+        "Guang Hao Low",
+        "Nathan Wiebe"
+      ],
+      "year": 2018,
+      "url": "https://arxiv.org/pdf/1806.01838v1",
+      "locator": "Definition 7, Corollary 8 and Eq. (14); Definition 15 and Eq. (31); Theorem 17, Corollary 18, Lemma 19; Sections 4.3-4.4, Lemmas 52-53",
+      "sourceStatus": "fulltext-inspected",
+      "programs": [
+        "examples/literature/lcu-block-product.qp",
+        "examples/literature/lcu-block-sum.qp",
+        "examples/literature/qsvt-phase-sequence.qp"
+      ],
+      "scope": "Block-encoding arithmetic and odd/even QSVT circuit sequences with an explicit reflection-phase convention",
+      "accessModel": [
+        "Given matrix block encodings",
+        "Positive coefficient PREPARE and coherent SELECT for sums",
+        "Supplied real phases for QSVT"
+      ],
+      "limitations": [
+        "Block sum specializes to exact positive coefficients",
+        "QSVT uses square blocks with equal input/output projectors",
+        "No phase-synthesis procedure",
+        "Real-part wrapper uses two controlled sequences, costing twice the signal queries",
+        "No formal verification"
+      ]
+    },
+    {
+      "id": "low-chuang-2019",
+      "title": "Hamiltonian Simulation by Qubitization",
+      "authors": [
+        "Guang Hao Low",
+        "Isaac L. Chuang"
+      ],
+      "year": 2019,
+      "url": "https://arxiv.org/pdf/1610.06546v3",
+      "locator": "Section 4, Eq. (16), Lemma 8; contrast the general construction in Lemma 10",
+      "sourceStatus": "fulltext-inspected",
+      "programs": [
+        "examples/literature/qubitization-walk.qp"
+      ],
+      "scope": "Hermitian self-inverse signal-oracle walk and derived Chebyshev transformation",
+      "accessModel": [
+        "Signal-state preparation G",
+        "Hermitian self-inverse signal unitary U"
+      ],
+      "limitations": [
+        "Specialization S = I",
+        "General non-self-inverse signal conversion omitted",
+        "Chebyshev block, not a complete optimal Hamiltonian simulator",
+        "No formal verification"
+      ]
+    },
+    {
+      "id": "chen2024-lattice-withdrawn",
+      "title": "Quantum Algorithms for Lattice Problems",
+      "authors": [
+        "Yilei Chen"
+      ],
+      "year": 2024,
+      "url": "https://eprint.iacr.org/2024/555",
+      "locator": "April 10, 2024 mirror: Sections 3.2-3.5, equations (12), (15)-(38), pp. 17-37; official April 18 withdrawal checked separately",
+      "sourceStatus": "fulltext-inspected",
+      "programs": [
+        "examples/literature/chen-nine-stages.qp",
+        "examples/literature/chen-step9-domain-extension.qp"
+      ],
+      "scope": "Source-level nine-stage quantum program and classical equation collection, mathematical state assertions, and isolated disputed Step 9 domain-extension equality",
+      "accessModel": [
+        "Explicit opaque lattice and complex Gaussian preparation",
+        "Explicit opaque modular arithmetic, vector Fourier transform, rounding, CRT, phase and domain-extension operations",
+        "External classical CRT reconstruction and Gaussian elimination"
+      ],
+      "limitations": [
+        "The polynomial-time LWE claim was withdrawn; the disputed transition is retained as an audit obligation, not accepted as true",
+        "No gate decomposition, normalization, finite-encoding, approximation, typechecking, semantics or proof checking",
+        "The inspected mirror is dated April 10, 2024; no claim to have inspected the revised PDF or verified a PDF byte hash",
+        "The finite representative set in the isolated Step 9 notebook is an explicit authoring convention requiring a correspondence proof",
+        "No complete formal refutation or full lattice-problem reductions"
+      ],
+      "fulltextUrl": "https://community.isc2.org/ijoyk78323/attachments/ijoyk78323/tech-talk/4394/1/2024-555.pdf",
+      "versionDate": "2024-04-10",
+      "accessedOn": "2026-11-08",
+      "sha256": null,
+      "hashNote": "Indexed PDF full text inspected; direct mirror download returned HTML and direct ePrint PDF returned 403. No PDF byte hash is asserted.",
+      "statusUrl": "https://www.chenyilei.net/outputs.html"
+    },
+    {
+      "id": "griffiths-niu-1995",
+      "title": "Semiclassical Fourier Transform for Quantum Computation",
+      "authors": [
+        "Robert B. Griffiths",
+        "Chi-Sheng Niu"
+      ],
+      "year": 1995,
+      "url": "https://arxiv.org/pdf/quant-ph/9511007",
+      "locator": "Eq. (1), Eqs. (10)-(11), and Fig. 2",
+      "sourceStatus": "fulltext-inspected",
+      "programs": [
+        "examples/literature/semiclassical-qft.qp"
+      ],
+      "scope": "Positive Fourier transform followed by measurement using one-qubit gates and classical feedback",
+      "accessModel": [
+        "Exact phase rotations, Hadamards, and computational-basis measurement"
+      ],
+      "limitations": [
+        "Produces a classical sample, not a coherent QFT output",
+        "MSB-first input and LSB-first measured output must be respected",
+        "No verified measurement semantics"
+      ]
+    },
+    {
+      "id": "cleve-ekert-macchiavello-mosca-1997",
+      "title": "Quantum Algorithms Revisited",
+      "authors": [
+        "Richard Cleve",
+        "Artur Ekert",
+        "Chiara Macchiavello",
+        "Michele Mosca"
+      ],
+      "year": 1997,
+      "url": "https://arxiv.org/pdf/quant-ph/9708016v1",
+      "locator": "Section 5, Figs. 5-6, Eqs. (5.1)-(5.4); Section 3, Fig. 4, Eqs. (3.3)-(3.9) for DJ/BV",
+      "sourceStatus": "fulltext-inspected",
+      "programs": [
+        "examples/literature/quantum-phase-estimation.qp",
+        "examples/deutsch-jozsa.qp",
+        "examples/bernstein-vazirani.qp"
+      ],
+      "scope": "Repeated controlled powers, finite-sum phase distribution, and exact dyadic recovery; one-query Deutsch-Jozsa and Bernstein-Vazirani networks",
+      "accessModel": [
+        "Controlled U and a supplied normalized eigenstate",
+        "Inverse QFT interface corresponding to examples/qft.qp"
+      ],
+      "limitations": [
+        "Charges repeated U queries instead of unit-cost powers",
+        "Eigenstate preparation and U synthesis remain external",
+        "No module linkage or theorem checking"
+      ]
+    },
+    {
+      "id": "regev-2024",
+      "title": "An Efficient Quantum Factoring Algorithm",
+      "authors": [
+        "Oded Regev"
+      ],
+      "year": 2024,
+      "url": "https://arxiv.org/pdf/2308.06572v3",
+      "locator": "Section 3, Eqs. (2)-(6); Section 4, Corollary 4.5; Section 5, Claim 5.1 and proof of Theorem 1.1",
+      "sourceStatus": "fulltext-inspected",
+      "programs": [
+        "examples/literature/regev-lattice-sampling.qp"
+      ],
+      "scope": "Multidimensional Gaussian/Fourier sampling, classical repeated-square product, noisy-dual recovery interface and guarded factor extraction",
+      "accessModel": [
+        "Approximate one-dimensional Gaussian preparation",
+        "Balanced subset-product classical routine",
+        "Clean reversible modular-product oracle",
+        "LLL/Gram-Schmidt short-generator interface",
+        "Signed modular powers and gcd"
+      ],
+      "limitations": [
+        "Short nontrivial lattice relation is an explicit number-theoretic heuristic",
+        "No Gaussian synthesis, fast arithmetic or reversible compiler",
+        "No concrete LLL implementation",
+        "Approximate QFT cutoff error is an authored telescoping bound",
+        "Single factoring attempt can return zero",
+        "No formal verification or classical lower-bound claim"
+      ]
+    },
+    {
+      "id": "bhmt-2000",
+      "title": "Quantum Amplitude Amplification and Estimation",
+      "authors": [
+        "Gilles Brassard",
+        "Peter Hoyer",
+        "Michele Mosca",
+        "Alain Tapp"
+      ],
+      "year": 2000,
+      "url": "https://arxiv.org/pdf/quant-ph/0005055v1",
+      "locator": "Section 2 Algorithm QSearch and Theorem 3; Section 4 Amplitude Estimation algorithm and Theorem 12 (k=1)",
+      "sourceStatus": "fulltext-inspected",
+      "programs": [
+        "examples/literature/amplitude-search.qp",
+        "examples/literature/amplitude-estimation.qp",
+        "examples/grover.qp"
+      ],
+      "scope": "Unknown-amplitude search and power-of-two amplitude estimation with explicit controlled iterate sign",
+      "accessModel": [
+        "Unitary preparation, good/zero reflections, inverse QFT",
+        "Independent classical uniform samples and predicate evaluation"
+      ],
+      "limitations": [
+        "Exact oracle access; no gate synthesis",
+        "Costs count access calls only",
+        "Expected cost and probability bounds unproved"
+      ]
+    },
+    {
+      "id": "shor-1996",
+      "title": "Polynomial-Time Algorithms for Prime Factorization and Discrete Logarithms on a Quantum Computer",
+      "authors": [
+        "Peter W. Shor"
+      ],
+      "year": 1996,
+      "url": "https://arxiv.org/pdf/quant-ph/9508027v2",
+      "locator": "Section 4 QFT; Section 5, Eqs. (5.1)-(5.5), order finding and continued fractions",
+      "sourceStatus": "fulltext-inspected",
+      "programs": [
+        "examples/qft.qp",
+        "examples/shor-order-finding.qp",
+        "examples/literature/shor-factoring.qp"
+      ],
+      "scope": "Positive QFT, quantum order sample and bounded classical factor reduction",
+      "accessModel": [
+        "Reversible modular-power multiplication",
+        "Classical gcd, modular exponentiation, random base and continued fractions"
+      ],
+      "limitations": [
+        "Odd non-prime-power inputs only",
+        "No success probability asserted for bounded retries",
+        "Arithmetic implementation and costs external"
+      ]
+    },
+    {
+      "id": "grover-1996",
+      "title": "A fast quantum mechanical algorithm for database search",
+      "authors": [
+        "Lov K. Grover"
+      ],
+      "year": 1996,
+      "url": "https://arxiv.org/pdf/quant-ph/9605043",
+      "locator": "Section 3, algorithm; Section 4, amplification discussion",
+      "sourceStatus": "fulltext-inspected",
+      "programs": [
+        "examples/grover.qp"
+      ],
+      "scope": "Parametric search iterations with gate-level diffuser",
+      "accessModel": [
+        "External phase marking oracle"
+      ],
+      "limitations": [
+        "Supplied iteration count",
+        "Diffuser has an irrelevant global minus sign for this uncontrolled circuit",
+        "Proof and gate decomposition of multi-control operations absent"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+qparam BlockEncodingProduct
+title "Multiplication of block-encoded matrices"
+description "Gilyen, Su, Low and Wiebe, arXiv:1806.01838v1, Section 4.4, Lemma 53. Register-labelled operators act on the named wires and as the identity elsewhere; independent ancillas preserve the product block."
+
+parameter n : Nat
+parameter a : Nat
+parameter b : Nat
+parameter alpha : Real
+parameter beta : Real
+parameter delta : Real
+parameter epsilon : Real
+assume scales : $\alpha>0\land\beta>0\land\delta\ge0\land\epsilon\ge0$
+assume matrix_norms : $\norm{A}\le\alpha\land\norm{B}\le\beta$
+state block_A := $\widetilde{A}=\alpha(\bra{0^a}\otimes I)U(\ket{0^a}\otimes I)$
+state block_B := $\widetilde{B}=\beta(\bra{0^b}\otimes I)V(\ket{0^b}\otimes I)$
+assume approximation_A : $\norm{A-\widetilde{A}}\le\delta$
+assume approximation_B : $\norm{B-\widetilde{B}}\le\epsilon$
+
+oracle encode_A(left : Qubit[a], q : Qubit[n])
+oracle encode_B(right : Qubit[b], q : Qubit[n])
+
+spec encode_A {
+  requires $U^{\dagger}U=I$
+  ensures $\operatorname{unitary}(\operatorname{encodeA})=U$
+}
+
+spec encode_B {
+  requires $V^{\dagger}V=I$
+  ensures $\operatorname{unitary}(\operatorname{encodeB})=V$
+}
+
+algorithm multiply(left : Qubit[a], right : Qubit[b], q : Qubit[n]) {
+  assert $\ket{\Psi_0}=\ket{0^a}\otimes\ket{0^b}\otimes\ket{\psi}$
+  call encode_B(right, q)
+  call encode_A(left, q)
+  assert $\alpha\beta(\bra{0^{a+b}}\otimes I)\ket{\Psi_2}=\widetilde{A}\widetilde{B}\ket{\psi}$
+}
+
+spec multiply {
+  requires $\ket{\Psi_0}=\ket{0^a}\otimes\ket{0^b}\otimes\ket{\psi}$
+  ensures $W=U_{\mathrm{left},q}V_{\mathrm{right},q}$
+  ensures $\norm{AB-\alpha\beta(\bra{0^{a+b}}\otimes I)W(\ket{0^{a+b}}\otimes I)}\le\alpha\epsilon+\beta\delta$
+  costs $Q_U=1\land Q_V=1\land Q_{\mathrm{anc}}=a+b$
+}
+
+proof multiply {
+  goal $\norm{AB-\widetilde{A}\widetilde{B}}\le\alpha\epsilon+\beta\delta$
+  admit "Lemma 53 requires separate ancillas and norm bounds. Register-labelled U and V leave the other ancilla untouched; they are embedded in fixed left/right/q wire order."
+}

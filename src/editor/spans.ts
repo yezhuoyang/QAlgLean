@@ -1,5 +1,25 @@
 export interface MathSpan { from: number; to: number; latex: string }
 
+/** Preserve source line links while keeping multiline mathematical spans together. */
+export function programLines(source: string): { source: string; line: number }[] {
+  const spans = mathSpans(source);
+  const result: { source: string; line: number }[] = [];
+  let start = 0, line = 0, startLine = 0, spanIndex = 0;
+  for (let index = 0; index < source.length; index++) {
+    if (source[index] !== '\n') continue;
+    while (spans[spanIndex] && spans[spanIndex].to <= index) spanIndex++;
+    const span = spans[spanIndex];
+    if (!span || index < span.from) {
+      result.push({ source: source.slice(start, index).replace(/\r$/, ''), line: startLine });
+      start = index + 1;
+      startLine = line + 1;
+    }
+    line++;
+  }
+  if (start < source.length) result.push({ source: source.slice(start), line: startLine });
+  return result;
+}
+
 /** Source ranges include both dollar delimiters. Quotes and comments stay literal. */
 export function mathSpans(source: string): MathSpan[] {
   const result: MathSpan[] = [];

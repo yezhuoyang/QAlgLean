@@ -2,7 +2,7 @@
   "name": "qparam-studio",
   "displayName": "QParam Studio",
   "description": "Quantum programs and specifications with mathematics rendered directly in the VS Code editor.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "yezhuoyang",
   "license": "Apache-2.0",
   "repository": {
@@ -145,10 +145,11 @@
     "build": "npm run compile && node scripts/build.cjs",
     "watch": "tsc -watch -p .",
     "test": "npm run build && node --test test/*.test.cjs",
-    "package": "npm run build && node -e \"require('fs').mkdirSync('artifacts',{recursive:true})\" && vsce package --no-dependencies --out artifacts/qparam-studio-0.2.0.vsix",
+    "package": "npm run build && node -e \"require('fs').mkdirSync('artifacts',{recursive:true})\" && vsce package --no-dependencies --out artifacts/qparam-studio-0.3.0.vsix",
     "vscode:prepublish": "npm run build",
     "preview": "npm run build && node scripts/preview.cjs",
-    "test:extension": "npm run build && node scripts/test-extension.cjs"
+    "test:extension": "npm run build && node scripts/test-extension.cjs",
+    "check:literature": "npm run build && node --test test/literature-corpus.test.cjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.4",

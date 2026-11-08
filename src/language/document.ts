@@ -20,7 +20,7 @@ export interface Item {
   mathLine?: number;
 }
 export interface Section {
-  kind: 'parameter' | 'assumption' | 'state' | 'oracle' | 'algorithm' | 'spec' | 'proof';
+  kind: 'parameter' | 'assumption' | 'state' | 'oracle' | 'classical' | 'algorithm' | 'spec' | 'proof';
   name: string;
   line: number;
   endLine: number;
@@ -35,7 +35,7 @@ export interface QDocument {
   sections: Section[];
   diagnostics: Diagnostic[];
   parserVersion?: string;
-  program: { algorithms: CircuitDeclaration[]; oracles: CircuitDeclaration[] };
+  program: { algorithms: CircuitDeclaration[]; oracles: CircuitDeclaration[]; classicals: CircuitDeclaration[] };
 }
 
 /** Structural circuit syntax. No constructor is a checked quantum operation. */
@@ -46,13 +46,24 @@ export type IndexExpression =
 export interface RegisterOperand { kind: 'register'; name: string; index?: IndexExpression; end?: IndexExpression }
 export type CircuitArgument = RegisterOperand | { kind: 'index'; expression: IndexExpression }
   | { kind: 'math'; source: string; ast: MathNode };
-export interface CircuitParameter { name: string; type: 'Qubit' | 'Nat' | 'Int' | 'Real' | 'Complex' | 'Bool'; size?: IndexExpression }
+export type CircuitValueType = 'Qubit' | 'Nat' | 'Int' | 'Real' | 'Complex' | 'Bool' | 'Bit' | 'Math';
+export interface CircuitType { type: CircuitValueType; size?: IndexExpression }
+export interface CircuitParameter extends CircuitType { name: string }
+export interface MathematicalExpression { source: string; ast: MathNode }
+export type ClassicalExpression = MathematicalExpression | { kind: 'classical-call'; name: string; arguments: CircuitArgument[] };
 export type CircuitInstruction =
   | { kind: 'gate' | 'call'; name: string; arguments: CircuitArgument[]; modifiers: CircuitModifier[]; line: number }
   | { kind: 'repeat'; index: string; from: IndexExpression; to: IndexExpression; body: CircuitInstruction[]; line: number }
-  | { kind: 'measure'; operand: RegisterOperand; result: string; line: number };
+  | { kind: 'measure'; operand: RegisterOperand; result: string; line: number }
+  | { kind: 'let' | 'var'; name: string; valueType: CircuitType; value: ClassicalExpression; line: number }
+  | { kind: 'set'; name: string; value: ClassicalExpression; line: number }
+  | { kind: 'if'; condition: MathematicalExpression; then: CircuitInstruction[]; otherwise: CircuitInstruction[]; line: number }
+  | { kind: 'while'; condition: MathematicalExpression; body: CircuitInstruction[]; line: number }
+  | { kind: 'assert' | 'invariant' | 'return'; expression: MathematicalExpression; line: number }
+  | { kind: 'allocate'; name: string; valueType: CircuitType; line: number }
+  | { kind: 'discard'; operand: RegisterOperand; line: number };
 export type CircuitModifier = { kind: 'adjoint' } | { kind: 'controlled'; controls: RegisterOperand[] };
-export interface CircuitDeclaration { name: string; parameters: CircuitParameter[]; body: CircuitInstruction[]; opaque: boolean; line: number }
+export interface CircuitDeclaration { name: string; parameters: CircuitParameter[]; body: CircuitInstruction[]; opaque: boolean; result?: CircuitType; line: number }
 
 interface Statement { text: string; offset: number; line: number; endLine: number }
 const name = '[A-Za-z][A-Za-z0-9_]*';
@@ -112,11 +123,11 @@ function parseRegister(source: string): RegisterOperand {
 }
 
 /**
- * Parse the QP 0.2 authoring fragment. This checks syntax only: successful parsing
+ * Parse the QP 0.3 authoring fragment. This checks syntax only: successful parsing
  * establishes neither mathematical truth, program typing, nor a Hoare theorem.
  */
 export function parseDocument(source: string): QDocument {
-  const doc: QDocument = { name: 'Untitled', title: 'Untitled quantum document', description: '', sections: [], diagnostics: [], parserVersion: '0.2', program: { algorithms: [], oracles: [] } };
+  const doc: QDocument = { name: 'Untitled', title: 'Untitled quantum document', description: '', sections: [], diagnostics: [], parserVersion: '0.3', program: { algorithms: [], oracles: [], classicals: [] } };
   const starts = [0];
   for (let i = 0; i < source.length; i++) if (source[i] === '\n') starts.push(i + 1);
   const position = (offset: number): { line: number; column: number } => {
@@ -167,8 +178,12 @@ export function parseDocument(source: string): QDocument {
   let header = false;
   let active: Section | undefined;
   let activeOffset = 0;
-  const loops: Extract<CircuitInstruction, { kind: 'repeat' }>[] = [];
+  interface LocalBinding extends CircuitType { mutable: boolean }
+  type BlockInstruction = Extract<CircuitInstruction, { kind: 'repeat' | 'while' | 'if' }>;
+  const blocks: { instruction: BlockInstruction; body: CircuitInstruction[]; locals: Map<string, LocalBinding>; inElse?: boolean }[] = [];
+  const locals = new Map<string, LocalBinding>();
   const pendingCalls: { instruction: Extract<CircuitInstruction, { kind: 'gate' | 'call' }>; statement: Statement }[] = [];
+  const pendingClassicalCalls: { expression: Extract<ClassicalExpression, { kind: 'classical-call' }>; statement: Statement }[] = [];
   const declarations = new Set<string>();
   const scalarParameters = new Set<string>();
   const metadata = new Set<string>();
@@ -211,37 +226,54 @@ export function parseDocument(source: string): QDocument {
     error('Expected a double-quoted string (JSON escapes are supported).', statement.offset, statement.text.length);
     return undefined;
   };
+  const parseType = (text: string): CircuitType => {
+    const match = /^(Qubit|Nat|Int|Real|Complex|Bool|Bit|Math)(?:\[([^\]]+)\])?$/.exec(text.trim());
+    if (!match || (match[2] !== undefined && match[1] !== 'Qubit' && match[1] !== 'Bit')) {
+      throw new Error('Expected Qubit, Qubit[size], Bit, Bit[size], Nat, Int, Real, Complex, Bool, or Math.');
+    }
+    return { type: match[1] as CircuitValueType, ...(match[2] ? { size: parseIndex(match[2]) } : {}) };
+  };
   const signature = (text: string, statement: Statement): CircuitParameter[] => {
     const names = new Set<string>();
     const parameters: CircuitParameter[] = [];
     for (const argument of splitArguments(text)) {
-      const match = new RegExp(`^(${name})\\s*:\\s*(Qubit|Nat|Int|Real|Complex|Bool)(?:\\[([^\\]]+)\\])?$`).exec(argument);
-      if (!match || (match[3] !== undefined && match[2] !== 'Qubit')) {
-        error('Algorithm arguments must be name : Qubit[size] or a scalar type (Nat, Int, Real, Complex, Bool).', statement.offset, statement.text.length);
+      const match = new RegExp(`^(${name})\\s*:\\s*(.+)$`).exec(argument);
+      if (!match) {
+        error('Algorithm arguments must be name : Type.', statement.offset, statement.text.length);
         continue;
       }
       if (names.has(match[1])) error(`Duplicate algorithm argument ${match[1]}.`, statement.offset, statement.text.length);
       names.add(match[1]);
       try {
-        parameters.push({ name: match[1], type: match[2] as CircuitParameter['type'], ...(match[3] ? { size: parseIndex(match[3]) } : {}) });
+        parameters.push({ name: match[1], ...parseType(match[2]) });
       } catch (err) { error((err as Error).message, statement.offset, statement.text.length); }
     }
     return parameters;
   };
+  const binding = (identifier: string): LocalBinding | CircuitParameter | undefined => {
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      const local = blocks[i].locals.get(identifier);
+      if (local) return local;
+    }
+    return locals.get(identifier) ?? active!.circuit!.parameters.find(parameter => parameter.name === identifier);
+  };
+  const declareLocal = (identifier: string, value: LocalBinding): void => {
+    if (binding(identifier) || scalarParameters.has(identifier)) throw new Error(`Local name ${identifier} is already active; shadowing is not supported.`);
+    (blocks.at(-1)?.locals ?? locals).set(identifier, value);
+  };
   const appendInstruction = (instruction: CircuitInstruction): void => {
-    (loops.at(-1)?.body ?? active!.circuit!.body).push(instruction);
+    (blocks.at(-1)?.body ?? active!.circuit!.body).push(instruction);
   };
   const checkIndexNames = (expression: IndexExpression): void => {
     if (expression.kind === 'arithmetic') { checkIndexNames(expression.left); checkIndexNames(expression.right); }
     else if (expression.kind === 'variable' && !scalarParameters.has(expression.name)
-      && !active!.circuit!.parameters.some(parameter => parameter.name === expression.name && parameter.type !== 'Qubit')
-      && !loops.some(loop => loop.index === expression.name)) throw new Error(`Unknown circuit index ${expression.name}.`);
+      && !(binding(expression.name) && binding(expression.name)!.type !== 'Qubit')) throw new Error(`Unknown circuit index ${expression.name}.`);
   };
   const checkedRegister = (text: string, quantum = true): RegisterOperand => {
     const operand = parseRegister(text);
-    const parameter = active!.circuit!.parameters.find(parameter => parameter.name === operand.name);
-    if (quantum && parameter?.type !== 'Qubit') throw new Error(`Unknown quantum register ${operand.name}; declare it in the circuit signature.`);
-    if (!quantum && !parameter && !scalarParameters.has(operand.name) && !loops.some(loop => loop.index === operand.name)) throw new Error(`Unknown circuit argument ${operand.name}.`);
+    const parameter = binding(operand.name);
+    if (quantum && parameter?.type !== 'Qubit') throw new Error(`Unknown quantum register ${operand.name}; declare it in the circuit signature or allocate it.`);
+    if (!quantum && !parameter && !scalarParameters.has(operand.name)) throw new Error(`Unknown circuit argument ${operand.name}.`);
     if (operand.index) checkIndexNames(operand.index);
     if (operand.end) checkIndexNames(operand.end);
     return operand;
@@ -257,14 +289,41 @@ export function parseDocument(source: string): QDocument {
     const expression = parseIndex(value); checkIndexNames(expression);
     return { kind: 'index', expression };
   };
+  const mathematical = (kind: string, expression: string, statement: Statement): MathematicalExpression => {
+    const item = mathItem(kind, kind, expression, statement, statement.offset + statement.text.indexOf(expression));
+    active!.items.push(item);
+    if (!item.ast) throw new Error(`${kind} requires valid mathematical syntax delimited by $…$.`);
+    return { source: item.math!, ast: item.ast };
+  };
+  const classicalExpression = (expression: string, statement: Statement): ClassicalExpression => {
+    const call = new RegExp(`^call\\s+(${name})\\s*\\(([\\s\\S]*)\\)$`).exec(expression);
+    if (!call) return mathematical('value', expression, statement);
+    const result: Extract<ClassicalExpression, { kind: 'classical-call' }> = {
+      kind: 'classical-call', name: call[1], arguments: splitArguments(call[2]).map(value => circuitArgument(value, statement))
+    };
+    pendingClassicalCalls.push({ expression: result, statement });
+    return result;
+  };
 
   for (const statement of statements) {
     const text = statement.text;
     if (active) {
+      if (/^}\s*else\s*{$/.test(text)) {
+        const block = blocks.at(-1);
+        if (active.kind !== 'algorithm' || block?.instruction.kind !== 'if' || block.inElse) {
+          error('else must immediately continue an open if block, once.', statement.offset, text.length);
+        } else {
+          block.body = block.instruction.otherwise;
+          block.locals = new Map();
+          block.inElse = true;
+          active.items.push({ kind: 'branch', label: 'else', text, line: statement.line });
+        }
+        continue;
+      }
       if (text === '}') {
-        if (active.kind === 'algorithm' && loops.length) {
-          loops.pop();
-          active.items.push({ kind: 'loop-end', label: 'end', text, line: statement.line });
+        if (active.kind === 'algorithm' && blocks.length) {
+          const block = blocks.pop()!;
+          active.items.push({ kind: block.instruction.kind === 'repeat' ? 'loop-end' : 'block-end', label: 'end', text, line: statement.line });
         } else { finish(active, statement); active = undefined; }
         continue;
       }
@@ -283,15 +342,60 @@ export function parseDocument(source: string): QDocument {
       } else {
         const repeat = new RegExp(`^repeat\\s+(${name})\\s+in\\s+(.+?)\\.\\.(.+?)\\s*\\{$`).exec(text);
         const measurement = new RegExp(`^measure\\s+(.+?)\\s*->\\s*(${name})$`).exec(text);
+        const local = new RegExp(`^(let|var)\\s+(${name})\\s*:\\s*(.+?)\\s*:=\\s*([\\s\\S]+)$`).exec(text);
+        const assignment = new RegExp(`^set\\s+(${name})\\s*:=\\s*([\\s\\S]+)$`).exec(text);
+        const control = /^(if|while)\s+([\s\S]+)\s*\{$/.exec(text);
+        const assertion = /^(assert|invariant|return)\s+([\s\S]+)$/.exec(text);
+        const allocation = new RegExp(`^allocate\\s+(${name})\\s*:\\s*(.+)$`).exec(text);
+        const discard = /^discard\s+(.+)$/.exec(text);
         try {
           if (repeat) {
-            if (loops.some(loop => loop.index === repeat[1])) throw new Error(`Loop index ${repeat[1]} is already active.`);
+            if (binding(repeat[1]) || scalarParameters.has(repeat[1])) throw new Error(`Loop index ${repeat[1]} is already active.`);
             const loop: Extract<CircuitInstruction, { kind: 'repeat' }> = { kind: 'repeat', index: repeat[1], from: parseIndex(repeat[2]), to: parseIndex(repeat[3]), body: [], line: statement.line };
             checkIndexNames(loop.from); checkIndexNames(loop.to);
-            appendInstruction(loop); loops.push(loop);
+            appendInstruction(loop);
+            blocks.push({ instruction: loop, body: loop.body, locals: new Map([[loop.index, { type: 'Nat', mutable: false }]]) });
             active.items.push({ kind: 'loop', label: 'repeat', text, line: statement.line });
+          } else if (control) {
+            const condition = mathematical(control[1], control[2].trim(), statement);
+            const instruction: BlockInstruction = control[1] === 'if'
+              ? { kind: 'if', condition, then: [], otherwise: [], line: statement.line }
+              : { kind: 'while', condition, body: [], line: statement.line };
+            appendInstruction(instruction);
+            blocks.push({ instruction, body: instruction.kind === 'if' ? instruction.then : instruction.body, locals: new Map() });
+          } else if (local) {
+            const valueType = parseType(local[3]);
+            if (valueType.type === 'Qubit') throw new Error('Use allocate for quantum registers, not a classical local binding.');
+            if (valueType.size) checkIndexNames(valueType.size);
+            const value = classicalExpression(local[4], statement);
+            declareLocal(local[2], { ...valueType, mutable: local[1] === 'var' });
+            appendInstruction({ kind: local[1] as 'let' | 'var', name: local[2], valueType, value, line: statement.line });
+            active.items.push({ kind: 'operation', label: local[1], text, line: statement.line });
+          } else if (assignment) {
+            const target = binding(assignment[1]);
+            if (!target) throw new Error(`Unknown mutable local ${assignment[1]}.`);
+            if (!('mutable' in target) || !target.mutable) throw new Error(`Cannot assign to ${assignment[1]}; declare a mutable local with var.`);
+            appendInstruction({ kind: 'set', name: assignment[1], value: classicalExpression(assignment[2], statement), line: statement.line });
+            active.items.push({ kind: 'operation', label: 'set', text, line: statement.line });
+          } else if (assertion) {
+            const kind = assertion[1] as 'assert' | 'invariant' | 'return';
+            if (kind === 'invariant' && !blocks.some(block => block.instruction.kind === 'repeat' || block.instruction.kind === 'while')) throw new Error('An invariant must occur inside a repeat or while block.');
+            if (kind === 'return' && !active.circuit!.result) throw new Error('A return expression requires an algorithm result type: algorithm name(...) -> Type {.');
+            appendInstruction({ kind, expression: mathematical(kind, assertion[2], statement), line: statement.line });
+          } else if (allocation) {
+            const valueType = parseType(allocation[2]);
+            if (valueType.type !== 'Qubit') throw new Error('allocate requires Qubit or Qubit[size].');
+            if (valueType.size) checkIndexNames(valueType.size);
+            declareLocal(allocation[1], { ...valueType, mutable: false });
+            appendInstruction({ kind: 'allocate', name: allocation[1], valueType, line: statement.line });
+            active.items.push({ kind: 'operation', label: 'allocate', text, line: statement.line });
+          } else if (discard) {
+            appendInstruction({ kind: 'discard', operand: checkedRegister(discard[1]), line: statement.line });
+            active.items.push({ kind: 'operation', label: 'discard', text, line: statement.line });
           } else if (measurement) {
-            appendInstruction({ kind: 'measure', operand: checkedRegister(measurement[1]), result: measurement[2], line: statement.line });
+            const operand = checkedRegister(measurement[1]);
+            declareLocal(measurement[2], { type: 'Bit', mutable: false });
+            appendInstruction({ kind: 'measure', operand, result: measurement[2], line: statement.line });
             active.items.push({ kind: 'operation', label: 'measure', text, line: statement.line });
           } else {
             let remaining = text;
@@ -314,7 +418,7 @@ export function parseDocument(source: string): QDocument {
               }
             }
             const operation = new RegExp(`^(call\\s+)?(${name})\\s*\\(([\\s\\S]*)\\)$`).exec(remaining);
-            if (!operation) throw new Error('Unsupported program statement. Use a gate, explicit call, measurement, or repeat block.');
+            if (!operation) throw new Error('Unsupported program statement. Use a gate, call, local binding, allocation, control block, assertion, return, or measurement.');
             const isCall = !!operation[1], gate = operation[2];
             if (!isCall && !Object.hasOwn(gates, gate) && !rotations.has(gate)) throw new Error(`Unsupported program statement ${gate}; declared circuits use call ${gate}(...).`);
             const operands = splitArguments(operation[3]);
@@ -354,12 +458,14 @@ export function parseDocument(source: string): QDocument {
       }
       continue;
     }
-    const parameter = new RegExp(`^parameter (${name}) : (Nat|Int|Real|Complex|Bool)$`).exec(text);
+    const parameter = new RegExp(`^parameter (${name}) : (Nat|Int|Real|Complex|Bool|Bit|Math)(\\[[^\\]]+\\])?$`).exec(text);
     if (parameter) {
       if (declarations.has(parameter[1])) error(`Duplicate declaration ${parameter[1]}.`, statement.offset, text.length);
       declarations.add(parameter[1]);
       scalarParameters.add(parameter[1]);
-      addSection('parameter', parameter[1], statement, { kind: 'declaration', label: parameter[1], text: parameter[2], line: statement.line });
+      try { parseType(parameter[2] + (parameter[3] ?? '')); }
+      catch (err) { error((err as Error).message, statement.offset, text.length); }
+      addSection('parameter', parameter[1], statement, { kind: 'declaration', label: parameter[1], text: parameter[2] + (parameter[3] ?? ''), line: statement.line });
       continue;
     }
     const expression = new RegExp(`^(assume|state) (${name}) (:=|:) ([\\s\\S]+)$`).exec(text);
@@ -379,13 +485,30 @@ export function parseDocument(source: string): QDocument {
       section.circuit = circuit; doc.program.oracles.push(circuit);
       continue;
     }
-    const algorithm = new RegExp(`^algorithm\\s+(${name})\\s*\\((.*)\\)\\s*\\{$`).exec(text);
+    const classical = new RegExp(`^classical\\s+(${name})\\s*\\((.*)\\)\\s*->\\s*(.+)$`).exec(text);
+    if (classical) {
+      const parameters = signature(classical[2], statement);
+      try {
+        const result = parseType(classical[3]);
+        if (result.type === 'Qubit' || parameters.some(parameter => parameter.type === 'Qubit')) throw new Error('A classical external signature uses classical values; use oracle for quantum registers.');
+        const circuit: CircuitDeclaration = { name: classical[1], parameters, result, body: [], opaque: true, line: statement.line };
+        const section = addSection('classical', classical[1], statement, { kind: 'declaration', label: classical[1], text, line: statement.line });
+        section.circuit = circuit; doc.program.classicals.push(circuit);
+      } catch (err) { error((err as Error).message, statement.offset, text.length); }
+      continue;
+    }
+    const algorithm = new RegExp(`^algorithm\\s+(${name})\\s*\\((.*)\\)\\s*(?:->\\s*(.+?)\\s*)?\\{$`).exec(text);
     const otherBlock = new RegExp(`^(spec|proof) (${name}) \\{$`).exec(text);
     if (algorithm || otherBlock) {
       if (algorithm) {
         active = addSection('algorithm', algorithm[1], statement);
         const circuit: CircuitDeclaration = { name: algorithm[1], parameters: signature(algorithm[2], statement), body: [], opaque: false, line: statement.line };
+        if (algorithm[3]) {
+          try { circuit.result = parseType(algorithm[3]); }
+          catch (err) { error((err as Error).message, statement.offset, text.length); }
+        }
         active.circuit = circuit; doc.program.algorithms.push(circuit);
+        locals.clear(); blocks.length = 0;
       } else active = addSection(otherBlock![1] as 'spec' | 'proof', otherBlock![2], statement);
       activeOffset = statement.offset;
       continue;
@@ -396,18 +519,24 @@ export function parseDocument(source: string): QDocument {
   if (active) {
     active.endLine = lines.length - 1;
     active.source = source.slice(activeOffset);
-    error(`Unclosed ${active.kind} ${active.name}${loops.length ? ' (including a repeat block)' : ''}; expected }.`, activeOffset);
+    error(`Unclosed ${active.kind} ${active.name}${blocks.length ? ' (including a nested control block)' : ''}; expected }.`, activeOffset);
   }
   // Resolve only circuit names and argument counts. This is not quantum typing.
   const circuits = new Map<string, CircuitDeclaration>();
-  for (const circuit of [...doc.program.algorithms, ...doc.program.oracles]) {
-    if (circuits.has(circuit.name)) error(`Duplicate circuit ${circuit.name}; algorithm and oracle names share a namespace.`, starts[circuit.line]);
+  for (const circuit of [...doc.program.algorithms, ...doc.program.oracles, ...doc.program.classicals]) {
+    if (circuits.has(circuit.name)) error(`Duplicate circuit ${circuit.name}; algorithm, oracle, and classical names share a namespace.`, starts[circuit.line]);
     circuits.set(circuit.name, circuit);
   }
   for (const { instruction, statement } of pendingCalls) {
     const target = circuits.get(instruction.name);
     if (!target) error(`Unknown circuit ${instruction.name}; declare an algorithm or an explicit oracle signature.`, statement.offset, statement.text.length);
+    else if (doc.program.classicals.includes(target)) error(`Classical external ${instruction.name} returns a value; bind its result with let or var.`, statement.offset, statement.text.length);
     else if (target.parameters.length !== instruction.arguments.length) error(`Circuit ${instruction.name} requires ${target.parameters.length} argument(s), received ${instruction.arguments.length}.`, statement.offset, statement.text.length);
+  }
+  for (const { expression, statement } of pendingClassicalCalls) {
+    const target = circuits.get(expression.name);
+    if (!target || (!target.result && !doc.program.classicals.includes(target))) error(`Unknown value-returning subroutine ${expression.name}; declare a classical signature or an algorithm with -> Type.`, statement.offset, statement.text.length);
+    else if (target.parameters.length !== expression.arguments.length) error(`Classical call ${expression.name} requires ${target.parameters.length} argument(s), received ${expression.arguments.length}.`, statement.offset, statement.text.length);
   }
   return doc;
 }

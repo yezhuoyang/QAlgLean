@@ -1,0 +1,47 @@
+qparam ChenStepNineDomainExtension
+title "Chen Step 9: the domain-extension obligation"
+description "An isolated syntax audit of the claimed state transition after equation (37), Section 3.5.9 of Chen's April 10, 2024 report. The paper's polynomial-time LWE claim was withdrawn after a Step 9 error. The notebook distinguishes a local extension map from the desired correlated state. Equality is deliberately an unproved, disputed goal. This parser does not detect the mathematical error."
+
+parameter n : Nat
+parameter D : Nat
+parameter M : Nat
+parameter kappa : Nat
+parameter w : Nat
+parameter Q : Nat
+parameter R : Nat
+parameter K : Nat
+assume moduli : $Q=M/2=D^{2}\prod_{h=1}^{\kappa}p_h\land K=\prod_{h=2}^{\kappa}p_h\land R=QK$
+assume first_direction : $b_1^{*}=K$
+assume source_phase : $\gamma_j=\exp(-2\pi i(2Dj)^{2}/(2M))$
+assume first_coordinate : $a_j=2D^{2}jb_1^{*}\bmod Q$
+assume other_coordinates : $\mathbf{c}_j=2D^{2}j\mathbf{b}^{*}_{[2,n]}+\mathbf{v}^{*}_{[2,n]}\bmod Q$
+assume representatives : $J=\{0,1,\ldots,\prod_{h=1}^{\kappa}p_h-1\}$
+
+// These are finite representative sums for the audit, not a proof that source normalization works.
+state before_extension := $\sum_{j\in J}\gamma_j\ket{a_j}\ket{\mathbf{c}_j}$
+state locally_extended := $\frac{1}{\sqrt{K}}\sum_{j\in J}\sum_{h=0}^{K-1}\gamma_j\ket{a_j+hQ}\ket{\mathbf{c}_j}$
+state claimed_correlated := $\sum_{j\in J}\gamma_j\ket{2D^{2}jb_1^{*}\bmod R}\ket{\mathbf{c}_j}$
+
+oracle extend_first(first : Qubit[w], oldmod : Nat, newmod : Nat)
+spec extend_first {
+  requires $\ket{\psi}=\ket{a}\otimes\ket{\chi}\land0\le a<Q\land R=QK$
+  ensures $\ket{\psi}=\frac{1}{\sqrt{K}}\sum_{h=0}^{K-1}\ket{a+hQ}\otimes\ket{\chi}$
+}
+
+algorithm step9_extension(first : Qubit[w], other : Qubit[(n-1)*w]) {
+  assert $\ket{\psi}\propto\sum_{j\in J}\gamma_j\ket{a_j}\ket{\mathbf{c}_j}$
+  call extend_first(first, Q, R)
+  assert $\ket{\psi}\propto\sum_{j\in J}\sum_{h=0}^{K-1}\gamma_j\ket{a_j+hQ}\ket{\mathbf{c}_j}$
+}
+
+spec step9_extension {
+  requires $\ket{\psi}=\ket{\phi_{8f}}$
+  ensures $\ket{\psi}=(E_{Q,R}\otimes I)\ket{\phi_{8f}}$
+  costs $Q_{\mathrm{extension}}=1$
+}
+
+proof disputed_correlation {
+  goal $\sum_{j\in J}\sum_{h=0}^{K-1}\gamma_j\ket{a_j+hQ}\ket{\mathbf{c}_j}\propto\sum_{j\in J}\gamma_j\ket{2D^{2}jb_1^{*}\bmod R}\ket{\mathbf{c}_j}$
+  admit "DISPUTED source claim: this is the missing equality between a local first-coordinate operation and the correlated phi8g expression. The author withdrew the LWE result; accepting a syntactically valid expression does not establish this equality."
+  admit "The finite representative set and projective normalization are explicit authoring choices for this audit. A complete formal refutation must instantiate the source parameters, trace each encoding, and prove that the two normalized states differ."
+}

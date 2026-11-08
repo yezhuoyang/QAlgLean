@@ -1,0 +1,173 @@
+qparam RegevLatticeFactoring
+title "Regev: Gaussian lattice sampling and factoring"
+description "Regev, arXiv:2308.06572v3, Sections 3-5. The program separates a classical repeated-square function from its clean reversible embedding, then samples d+4 times and extracts a factor through a declared lattice-reduction interface."
+
+parameter n : Nat
+parameter d : Nat
+parameter m : Nat
+parameter h : Nat
+parameter N : Nat
+parameter R : Real
+parameter T : Real
+parameter eta : Real
+parameter bases : Math
+assume dimensions : $n\ge2\land d\ge2\land m\ge1\land h\ge1$
+assume modulus : $1<N\le2^n\land N\bmod2=1\land\neg\operatorname{PrimePower}(N)$
+state width := $D=2^m$
+assume radius : $R>\sqrt{2d}\land 2\sqrt{d}R\le D<4\sqrt{d}R$
+assume small_bases : $\forall i\in\{0,\ldots,d-1\},b_i=\operatorname{bases}_i\land\gcd(b_i,N)=1\land\log_2(b_i)\in\mathcal{O}(\log d)$
+state square_bases := $a_i=b_i^2$
+state lattice := $L=\set{\mathbf{z}\in\mathbb{Z}^d}{\prod_{i=0}^{d-1}a_i^{z_i}\equiv1\pmod{N}}$
+state trivial_relations := $L_0=\set{\mathbf{z}\in L}{(\prod_{i=0}^{d-1}b_i^{z_i})\bmod N\in\{1,N-1\}}$
+state gaussian_weight := $\rho_s(\mathbf{z})=\exp(-\pi\norm{\mathbf{z}}^2/s^2)$
+state centered_box := $\mathcal{B}=\{-D/2,\ldots,D/2-1\}^d$
+state norm_factor := $Z=(\sum_{\mathbf{z}\in\mathcal{B}}\rho_R(\mathbf{z})^2)^{1/2}$
+state gaussian_state := $\ket{G}=\frac{1}{Z}\sum_{\mathbf{z}\in\mathcal{B}}\rho_R(\mathbf{z})\ket{\mathbf{z}+D/2}$
+state shifted_product := $f(\mathbf{x})=(\prod_{i=0}^{d-1}a_i^{x_i})\bmod N$
+state noise_radius := $\delta=\sqrt{d}/(\sqrt{2}R)$
+state gaussian_set_mass := $\rho_s(S)=\sum_{\mathbf{x}\in S}\rho_s(\mathbf{x})$
+state sample_distribution := $Q(\mathbf{w})=\frac{1}{\det L}\sum_{\mathbf{v}\in L^*/\mathbb{Z}^d}\frac{\rho_{1/(\sqrt{2}R)}(\mathbf{v}-\mathbf{w}+\mathbb{Z}^d)}{\rho_{1/(\sqrt{2}R)}(\mathbf{v}-D^{-1}\mathbb{Z}^d)}$
+assume precision : $0<\eta\le d^{-4}\land 2\pi m2^{-h}\le d^{-4}$
+assume short_relation_heuristic : $\exists\mathbf{u}\in L\setminus L_0,\norm{\mathbf{u}}\le T$
+assume recovery_separation : $\sqrt{2d+4}\,2^{d+2}\sqrt{d+5}T<\frac{1}{6\delta}(4\det L)^{-1/(d+4)}$
+
+oracle gaussian_1d(q : Qubit[m])
+oracle compute_product(x : Qubit[d*m], output : Qubit[n])
+classical subset_product(x : Math, j : Nat) -> Nat
+classical short_generators(B : Math, radius : Real) -> Math
+classical signed_powmod(base : Nat, exponent : Int, modulus : Nat) -> Nat
+classical gcd(x : Int, y : Nat) -> Nat
+
+spec gaussian_1d {
+  requires $\ket{q}=\ket{0^m}$
+  ensures $\norm{\ket{q'}-\frac{\sum_{z=-D/2}^{D/2-1}\rho_R(z)\ket{z+D/2}}{\sqrt{\sum_{z=-D/2}^{D/2-1}\rho_R(z)^2}}}\le\eta$
+  costs $G\in\mathcal{O}(m+\operatorname{poly}(\log d))$
+}
+
+spec subset_product {
+  requires $\mathbf{x}\in\{0,\ldots,D-1\}^d\land0\le j<m$
+  ensures $p=\prod_{i=0}^{d-1}a_i^{(\lfloor x_i/2^{m-1-j}\rfloor\bmod2)}$
+  costs $G\in\mathcal{O}(d\log^3 d)$
+}
+
+algorithm product_value(x : Math) -> Nat {
+  var e : Nat := $1$
+  repeat j in 0..m {
+    invariant $e=(\prod_{i=0}^{d-1}a_i^{\lfloor x_i/2^{m-j}\rfloor})\bmod N$
+    set e := $e^2\bmod N$
+    let p : Nat := call subset_product(x, j)
+    set e := $ep\bmod N$
+  }
+  return $e$
+}
+
+spec product_value {
+  requires $\mathbf{x}\in\{0,\ldots,D-1\}^d$
+  ensures $e=f(\mathbf{x})$
+  costs $G\in\mathcal{O}(m(d\log^3d+n\log n))$
+}
+
+spec compute_product {
+  requires $\mathbf{x}\in\{0,\ldots,D-1\}^d\land0\le y<2^n$
+  ensures $U_f(\ket{\mathbf{x}}\otimes\ket{y})=\ket{\mathbf{x}}\otimes\ket{y\oplus f(\mathbf{x})}$
+  costs $G\in\mathcal{O}(m(d\log^3d+n\log n))$
+}
+
+algorithm approximate_qft(q : Qubit[m]) {
+  repeat j in 0..m {
+    H(q[j])
+    repeat k in j+1..m {
+      if $k-j<h$ {
+        controlled(q[k]) Phase($\pi/2^{k-j}$, q[j])
+      }
+    }
+  }
+  repeat j in 0..m/2 {
+    SWAP(q[j], q[m-1-j])
+  }
+}
+
+spec approximate_qft {
+  ensures $\norm{\widetilde{F}_D-F_D}\le2\pi m2^{-h}$
+  costs $G_H=m\land G_{\mathrm{CP}}\le m(h-1)\land G_{\mathrm{SWAP}}=\lfloor m/2\rfloor$
+}
+
+algorithm sample_dual() -> Math {
+  allocate x : Qubit[d*m]
+  allocate output : Qubit[n]
+  repeat i in 0..d {
+    call gaussian_1d(x[i*m..(i+1)*m])
+  }
+  assert $\norm{\ket{\Psi_0}-\ket{G}\otimes\ket{0^n}}\le d\eta$
+  call compute_product(x, output)
+  assert $\norm{\ket{\Psi_1}-\frac{1}{Z}\sum_{\mathbf{z}\in\mathcal{B}}\rho_R(\mathbf{z})\ket{\mathbf{z}+D/2}\otimes\ket{f(\mathbf{z}+D/2)}}\le d\eta$
+  discard output
+  repeat i in 0..d {
+    call approximate_qft(x[i*m..(i+1)*m])
+  }
+  measure x -> y
+  discard x
+  return $\operatorname{decode}(y,m,d)/D$
+}
+
+spec sample_dual {
+  ensures $\mathbf{w}\in\{0,1/D,\ldots,(D-1)/D\}^d$
+  ensures $\operatorname{TV}(\operatorname{Law}(\mathbf{w}),Q)\in\mathcal{O}(2^{-d}+d\eta+dm2^{-h})$
+  costs $G\in\mathcal{O}(m(d\log^3d+n\log n)+dmh+d\operatorname{poly}(\log d))$
+}
+
+spec short_generators {
+  requires $L'=B\mathbb{Z}^{2d+4}$
+  ensures $V\subseteq L'\land\abs{V}\le2d+4$
+  ensures $\forall\mathbf{u}\in L',\norm{\mathbf{u}}\le\operatorname{radius}\implies\mathbf{u}\in\operatorname{span}_{\mathbb{Z}}(V)$
+  ensures $\forall\mathbf{v}\in V,\norm{\mathbf{v}}\le\sqrt{2d+4}\,2^{d+2}\operatorname{radius}$
+}
+
+spec signed_powmod {
+  requires $\gcd(\operatorname{base},\operatorname{modulus})=1$
+  ensures $v=\operatorname{base}^{\operatorname{exponent}}\bmod\operatorname{modulus}$
+}
+
+spec gcd {
+  ensures $g=\gcd(x,y)$
+}
+
+algorithm factor() -> Nat {
+  var samples : Math := $\emptyset$
+  repeat j in 0..d+4 {
+    let w : Math := call sample_dual()
+    set samples := $\operatorname{samples}\cup\{(j,\mathbf{w})\}$
+  }
+  let W : Math := $\operatorname{rows}(\operatorname{samples})$
+  let B : Math := $\begin{bmatrix}I_d&0\\\delta^{-1}W&\delta^{-1}I_{d+4}\end{bmatrix}$
+  let V : Math := call short_generators(B, $\sqrt{d+5}T$)
+  let count : Nat := $\abs{V}$
+  repeat j in 0..count {
+    let z : Math := $\operatorname{first}(V_j,d)$
+    var b : Nat := $1$
+    repeat i in 0..d {
+      let v : Nat := call signed_powmod($b_i$, $z_i$, N)
+      set b := $bv\bmod N$
+    }
+    if $b^2\bmod N=1\land b\ne1\land b\ne N-1$ {
+      let g : Nat := call gcd($b-1$, N)
+      if $1<g<N$ {
+        assert $g\mid N$
+        return $g$
+      }
+    }
+  }
+  return $0$
+}
+
+spec factor {
+  ensures $g=0\lor(1<g<N\land g\mid N)$
+  costs $Q_{\mathrm{sampler}}=d+4$
+}
+
+proof factor {
+  goal $d\in\Theta(\sqrt{n})\land\log R\in\mathcal{O}(\sqrt{n})\land h\in\mathcal{O}(\log n)\implies G_{\mathrm{sampler}}\in\mathcal{O}(n^{3/2}\log n)$
+  admit "The source's number-theoretic short-relation heuristic is explicit. LLL/Gram-Schmidt short generators, Gaussian preparation, balanced subset products, and clean reversible compilation remain interfaces with contracts."
+  admit "Product_value is classical: squaring overwrites a classical value. Compute_product must preserve its input and erase scratch; this file does not turn irreversible squaring into an in-place quantum gate."
+  admit "Each coordinate stores x = z + D/2 as an unsigned most-significant-bit-first word. Decode splits the measured register into d words. The shift changes Fourier phases but not the sampling distribution. V is enumerated for the final loop."
+}

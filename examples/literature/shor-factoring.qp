@@ -1,0 +1,96 @@
+qparam ShorFactoringReduction
+title "Shor: order sampling, continued fractions and factor extraction"
+description "Shor quant-ph/9508027v2, Section 5 and equations (5.1)-(5.5). Positive QFT and most-significant-bit-first controls match the source convention. This bounded reduction returns a nontrivial factor or 0; arithmetic and continued fractions are declared classical/quantum interfaces."
+
+parameter n : Nat
+parameter m : Nat
+parameter N : Nat
+parameter T : Nat
+assume modulus : $1<N<2^{n}\land N\bmod 2=1$
+assume precision : $N^{2}\le 2^{m}<2N^{2}$
+assume composite_case : $\neg\operatorname{PrimePower}(N)$
+oracle multiply_power(a : Nat, j : Nat, q : Qubit[n])
+oracle qft(q : Qubit[m])
+classical random_base(N : Nat) -> Nat
+classical gcd(x : Int, y : Nat) -> Nat
+classical powmod(a : Nat, e : Nat, N : Nat) -> Nat
+classical convergent_denominators(y : Nat, M : Nat, N : Nat) -> Math
+spec multiply_power {
+  requires $\gcd(a,N)=1\land 0\le x<N\land\ket{q}=\ket{x}$
+  ensures $\ket{q}=\ket{a^{2^{j}}x\bmod N}$
+}
+spec qft {
+  requires $\ket{q}=\ket{x}$
+  ensures $\ket{q}=\frac{1}{\sqrt{2^{m}}}\sum_{y=0}^{2^{m}-1}e^{2\pi ixy/2^{m}}\ket{y}$
+}
+spec random_base {
+  ensures $1<a<N$
+}
+spec gcd {
+  ensures $g=\gcd(x,y)$
+}
+spec powmod {
+  ensures $r=a^{e}\bmod N$
+}
+spec convergent_denominators {
+  requires $0\le y<M$
+  ensures $D=\{d:1\le d<N\land\exists p\in\mathbb{Z},\operatorname{Convergent}(p/d,y/M)\}$
+}
+
+algorithm sample_order(a : Nat) -> Nat {
+  allocate phase : Qubit[m]
+  allocate work : Qubit[n]
+  X(work[n-1])
+  repeat j in 0..m {
+    H(phase[j])
+    controlled(phase[j]) call multiply_power(a, m-1-j, work)
+  }
+  assert $\ket{\Psi}=\frac{1}{\sqrt{2^{m}}}\sum_{x=0}^{2^{m}-1}\ket{x}\otimes\ket{a^{x}\bmod N}$
+  call qft(phase)
+  measure phase -> y
+  discard phase
+  discard work
+  return $y$
+}
+spec sample_order {
+  requires $\gcd(a,N)=1$
+  ensures $0\le y<2^{m}$
+  costs $Q_{\mathrm{multiply}}=m$
+}
+
+algorithm factor() -> Nat {
+  repeat t in 0..T {
+    let a : Nat := call random_base(N)
+    let g : Nat := call gcd(a, N)
+    if $1<g<N$ {
+      return $g$
+    }
+    let y : Nat := call sample_order(a)
+    let D : Math := call convergent_denominators(y, 2^m, N)
+    let L : Nat := $\abs{D}$
+    repeat j in 0..L {
+      let r : Nat := $D_{j}$
+      let u : Nat := call powmod(a, r, N)
+      if $u=1\land r\bmod 2=0$ {
+        let x : Nat := call powmod(a, r/2, N)
+        if $x\ne 1\land x\ne N-1$ {
+          let d : Nat := call gcd($x-1$, N)
+          if $1<d<N$ {
+            assert $d\mid N$
+            return $d$
+          }
+        }
+      }
+    }
+  }
+  return $0$
+}
+spec factor {
+  ensures $d=0\lor(1<d<N\land d\mid N)$
+  costs $Q_{\mathrm{multiply}}\le Tm$
+}
+proof factor {
+  goal $d=0\lor(1<d<N\land d\mid N)$
+  admit "This is the odd non-prime-power reduction, with bounded retries and explicit failure 0. D is an ordered enumeration of the convergent denominators, with zero-based indexing. No lower bound on success for this finite T is asserted."
+  admit "The source's classical perfect-power/even preprocessing and complete reversible modular arithmetic are not implemented. Link the existing gate-level QFT component, provide a unitary extension outside valid residues, and prove the arithmetic interfaces."
+}

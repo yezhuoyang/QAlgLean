@@ -150,7 +150,7 @@ test('syntax diagnostics reject unknown programs, wrong arity, bad headers, and 
     ['qparam Demo\nparameter n : Nat\nparameter n : Nat', /Duplicate declaration/],
     ['qparam Demo\nalgorithm f(q : Qubit[2]) {\nCX(q[0])\n}', /requires 2/],
     ['qparam Demo\nalgorithm f(q : Qubit[2]) {\nmagic(q)\n}', /Unsupported program/],
-    ['qparam Demo\nalgorithm f(q : Bit) {\n}', /Algorithm arguments/],
+    ['qparam Demo\nalgorithm f(q : UnknownType) {\n}', /Expected Qubit/],
     ['qparam Demo\nalgorithm f(q : Qubit) {\nH(q)', /Unclosed algorithm/],
     ['qparam Demo\nstate psi : $x$', /Use :=/],
     ['qparam Demo\nassume positive := $n > 0$', /Use :/],

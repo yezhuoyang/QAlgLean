@@ -1,0 +1,76 @@
+qparam AmplitudeEstimation
+title "Amplitude estimation: a controlled Grover iterate"
+description "Brassard, Hoyer, Mosca and Tapp, quant-ph/0005055, amplitude estimation algorithm and Theorem 12. The controlled iterate retains its minus sign. A, the predicate reflection, zero reflection and inverse QFT are explicit access interfaces. Claims are unproved."
+
+parameter n : Nat
+parameter m : Nat
+parameter a : Real
+assume dimensions : $n\ge 1\land m\ge 1$
+assume amplitude : $0\le a\le 1$
+state prepared := $A\ket{0}^{\otimes n}=\sqrt{1-a}\ket{\psi_{0}}+\sqrt{a}\ket{\psi_{1}}$
+assume good_space : $\Pi\ket{\psi_{0}}=0\land\Pi\ket{\psi_{1}}=\ket{\psi_{1}}$
+assume normalized : $\norm{\ket{\psi_{0}}}=1\land\norm{\ket{\psi_{1}}}=1$
+assume unitary : $A^{\dagger}A=I$
+assume projector : $\Pi^{\dagger}=\Pi\land\Pi^{2}=\Pi$
+assume reflections : $S_{0}=I-2\ketbra{0^{n}}{0^{n}}\land S_{\chi}=I-2\Pi$
+oracle prepare(q : Qubit[n])
+oracle good_reflection(q : Qubit[n])
+oracle zero_reflection(q : Qubit[n])
+oracle inverse_qft(q : Qubit[m])
+spec prepare {
+  requires $\ket{q}=\ket{v}$
+  ensures $\ket{q}=A\ket{v}$
+}
+spec good_reflection {
+  requires $\ket{q}=\ket{v}$
+  ensures $\ket{q}=(I-2\Pi)\ket{v}$
+}
+spec zero_reflection {
+  requires $\ket{q}=\ket{v}$
+  ensures $\ket{q}=(I-2\ketbra{0^{n}}{0^{n}})\ket{v}$
+}
+spec inverse_qft {
+  requires $\ket{q}=\ket{x}$
+  ensures $\ket{q}=\frac{1}{\sqrt{2^{m}}}\sum_{y=0}^{2^{m}-1}e^{-2\pi ixy/2^{m}}\ket{y}$
+}
+
+algorithm controlled_iterate(c : Qubit, q : Qubit[n]) {
+  controlled(c) call good_reflection(q)
+  controlled(c) adjoint call prepare(q)
+  controlled(c) call zero_reflection(q)
+  controlled(c) call prepare(q)
+  Z(c)
+}
+spec controlled_iterate {
+  requires $\ket{c,q}=\ket{b}\otimes\ket{v}$
+  ensures $\ket{c,q}=\ket{b}\otimes(-AS_{0}A^{\dagger}S_{\chi})^{b}\ket{v}$
+}
+
+algorithm estimate() -> Real {
+  allocate phase : Qubit[m]
+  allocate q : Qubit[n]
+  call prepare(q)
+  repeat j in 0..m {
+    H(phase[j])
+    repeat k in 0..2^(m-1-j) {
+      call controlled_iterate(phase[j], q)
+    }
+  }
+  assert $\ket{\Psi}=\frac{1}{\sqrt{M}}\sum_{x=0}^{M-1}\ket{x}\otimes Q^{x}A\ket{0}^{\otimes n}$
+  call inverse_qft(phase)
+  measure phase -> y
+  discard phase
+  discard q
+  return $\sin^{2}(\pi y/2^{m})$
+}
+spec estimate {
+  requires $M=2^{m}\land Q=-AS_{0}A^{\dagger}S_{\chi}$
+  ensures $0\le\widetilde{a}\le 1$
+  probability $\Pr(\abs{\widetilde{a}-a}\le\frac{2\pi\sqrt{a(1-a)}}{M}+\frac{\pi^{2}}{M^{2}})\ge\frac{8}{\pi^{2}}$
+  costs $Q_{\mathrm{iterate}}=M-1$
+}
+proof estimate {
+  goal $\Pr(\abs{\widetilde{a}-a}\le\frac{2\pi\sqrt{a(1-a)}}{M}+\frac{\pi^{2}}{M^{2}})\ge\frac{8}{\pi^{2}}$
+  admit "Theorem 12 with k=1. Identify the returned value with a tilde, connect S0 and S_chi to the reflection contracts, and prove the controlled iterate including its sign."
+  admit "Exact oracle access and exact Fourier transform are assumed. Gate synthesis, physical costs, and the complete classical implementation of sin are outside this transcription."
+}

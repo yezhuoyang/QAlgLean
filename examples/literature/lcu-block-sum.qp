@@ -1,0 +1,55 @@
+qparam PositiveLinearCombination
+title "A positive linear combination of block encodings"
+description "An exact positive-coefficient specialization of Gilyen, Su, Low and Wiebe, arXiv:1806.01838v1, Section 4.3, Lemma 52. PREPARE and SELECT are explicit access-model primitives."
+
+parameter n : Nat
+parameter a : Nat
+parameter b : Nat
+parameter L : Nat
+parameter alpha : Real
+parameter beta : Real
+assume dimensions : $1\le L\le 2^b$
+assume weights : $\forall j\in\{0,\ldots,L-1\},y_j\ge0$
+assume normalization : $\beta=\sum_{j=0}^{L-1}y_j>0$
+assume block_scale : $\alpha>0$
+state target := $A=\sum_{j=0}^{L-1}y_j A_j$
+state coefficient_state := $\ket{G}=\sum_{j=0}^{L-1}\sqrt{y_j/\beta}\ket{j}$
+state preparation := $B\ket{0^b}=\ket{G}$
+assume preparation_unitary : $B^{\dagger}B=I$
+assume exact_blocks : $\forall j\in\{0,\ldots,L-1\},(\bra{0^a}\otimes I)U_j(\ket{0^a}\otimes I)=A_j/\alpha$
+assume unitary_blocks : $\forall j\in\{0,\ldots,L-1\},U_j^{\dagger}U_j=I$
+state selection_extension := $S=\sum_{j=0}^{L-1}\ketbra{j}{j}\otimes U_j+(I-\sum_{j=0}^{L-1}\ketbra{j}{j})\otimes I$
+
+oracle prepare(index : Qubit[b])
+oracle select(index : Qubit[b], anc : Qubit[a], q : Qubit[n])
+
+spec prepare {
+  requires $\ket{\eta}=\ket{0^b}$
+  ensures $\ket{\eta'}=\ket{G}$
+  ensures $\operatorname{unitary}(\operatorname{prepare})=B$
+}
+
+spec select {
+  requires $0\le j<L$
+  ensures $\operatorname{SELECT}(\ket{j}\otimes\ket{\psi})=\ket{j}\otimes U_j\ket{\psi}$
+  ensures $\operatorname{unitary}(\operatorname{select})=S$
+}
+
+algorithm linear_combination(index : Qubit[b], anc : Qubit[a], q : Qubit[n]) {
+  call prepare(index)
+  assert $\ket{\Psi_1}=\ket{G}\otimes\ket{0^a}\otimes\ket{\psi}$
+  call select(index, anc, q)
+  adjoint call prepare(index)
+  assert $(\bra{0^{a+b}}\otimes I)\ket{\Psi_3}=\frac{A}{\alpha\beta}\ket{\psi}$
+}
+
+spec linear_combination {
+  requires $\ket{\Psi_0}=\ket{0^{a+b}}\otimes\ket{\psi}$
+  ensures $(\bra{0^{a+b}}\otimes I)W(\ket{0^{a+b}}\otimes I)=A/(\alpha\beta)$
+  costs $Q_{\mathrm{SELECT}}=1\land Q_{\mathrm{PREPARE}}=2$
+}
+
+proof linear_combination {
+  goal $\alpha\beta(\bra{0^{a+b}}\otimes I)W(\ket{0^{a+b}}\otimes I)=A$
+  admit "This specialization uses one exact positive PREPARE state. Complex coefficients and inexact state-preparation pairs require the general Lemma 52 contract."
+}

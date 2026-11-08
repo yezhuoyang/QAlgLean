@@ -34,7 +34,7 @@ The loop count `k` is supplied, without a claim that arbitrary `k` gives high
 success. The oracle and its implementation remain external. See
 [Grover's original search paper](https://arxiv.org/abs/quant-ph/9605043).
 
-The Shor file is an order-finding skeleton, not a factoring program. The work
+The introductory Shor file is an order-finding skeleton. The new [factoring reduction](../examples/literature/shor-factoring.qp) adds bounded retries, continued-fraction candidates, order tests and gcd extraction with explicit classical interfaces. The work
 register starts at `|1>` and control index `j` uses `a^(2^(m-1-j))`. Modular
 multiplication requires a unitary extension beyond valid residues. See
 [Shor's factoring and discrete-logarithm paper](https://arxiv.org/abs/quant-ph/9508027).
@@ -53,12 +53,23 @@ windowed QFT as ideas in that work. See
 [the author's update](https://www.chenyilei.net/outputs.html) and
 [the original report](https://eprint.iacr.org/2024/555).
 
-The LWE example is a **notation and obligation notebook**. Its generic Gaussian
-is not asserted to be the paper's state, and the open success obligation is not
-a proposed solver. An infinite sum requires finite encoding and a truncation
-theorem before it can describe a finite circuit. No Step 9 transcription,
-counterexample or bug detection is included. A guessed substitute would
-undermine the intended paper audit.
+The original LWE example remains a notation notebook. The new
+[nine-stage transcription](../examples/literature/chen-nine-stages.qp) now records
+the actual source operations and intermediate state assertions. A separate
+[Step 9 notebook](../examples/literature/chen-step9-domain-extension.qp) isolates
+the disputed local-extension/correlated-state equality. The parser accepts this
+claim as syntax; it does not establish or refute it. The [Chen source notes](literature/chen.md)
+identify the inspected April 10 mirror, later withdrawal, and finite-encoding gaps.
+
+## Literature expansion
+
+The [source-linked corpus](literature/README.md) adds semiclassical QFT, phase and
+amplitude estimation, randomized search, Shor and Regev factoring reductions,
+first/second-order product formulas, Taylor LCU, block-encoding arithmetic,
+qubitization, QSVT and Chen's nine stages. Program bodies, access interfaces,
+assertions, runtime claims and omissions are distinguished per paper. Existing
+introductory notebooks remain small examples; they are not the limit of the new
+corpus. Run `npm run check:literature` for reproducible syntax/render/export coverage.
 
 ## What complete mathematical support requires
 

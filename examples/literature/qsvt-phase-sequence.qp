@@ -1,0 +1,105 @@
+qparam SingularValueTransformation
+title "QSVT: odd and even alternating phase sequences"
+description "Gilyen, Su, Low and Wiebe, arXiv:1806.01838v1, Definition 15, Theorem 17, Corollary 18 and Lemma 19. Square block encodings use the same zero-ancilla projector on both sides."
+
+parameter n : Nat
+parameter a : Nat
+parameter m : Nat
+assume sizes : $n\ge1\land a\ge1\land m\ge1$
+assume unitary : $U^{\dagger}U=I$
+state projector := $\Pi=\ketbra{0^a}{0^a}\otimes I$
+state block := $A=\Pi U\Pi$
+state phase := $F_s(\phi)=\exp(is\phi(2\Pi-I))$
+state reflection_matrix := $R(x)=\begin{bmatrix}x&\sqrt{1-x^2}\\\sqrt{1-x^2}&-x\end{bmatrix}$
+state response := $P_{d,s}(x)=(\prod_{j=1}^{d}(\exp(is\phi_j Z)R(x)))_{00}$
+state odd_sequence := $U_{2m+1,s}=F_s(\phi_1)U\prod_{j=1}^{m}(F_s(\phi_{2j})U^{\dagger}F_s(\phi_{2j+1})U)$
+state even_sequence := $U_{2m,s}=\prod_{j=1}^{m}(F_s(\phi_{2j-1})U^{\dagger}F_s(\phi_{2j})U)$
+state odd_transform := $P_{2m+1,s}^{(\mathrm{SV})}(A)=\sum_{j=1}^{\operatorname{rank}(\Pi)}P_{2m+1,s}(\sigma_j)\ketbra{u_j}{v_j}$
+state even_transform := $P_{2m,s}^{(\mathrm{SV})}(A)=\sum_{j=1}^{\operatorname{rank}(\Pi)}P_{2m,s}(\sigma_j)\ketbra{v_j}{v_j}$
+assume singular_vectors : $A=\sum_{j=1}^{\operatorname{rank}(\Pi)}\sigma_j\ketbra{u_j}{v_j}$
+assume singular_values : $\forall j\in\{1,\ldots,\operatorname{rank}(\Pi)\},0\le\sigma_j\le1$
+assume left_basis : $\Pi=\sum_{j=1}^{\operatorname{rank}(\Pi)}\ketbra{u_j}{u_j}$
+assume right_basis : $\Pi=\sum_{j=1}^{\operatorname{rank}(\Pi)}\ketbra{v_j}{v_j}$
+assume orthonormal : $\forall j\in\{1,\ldots,\operatorname{rank}(\Pi)\},\forall k\in\{1,\ldots,\operatorname{rank}(\Pi)\},\braket{u_j}{u_k}=\delta_{j,k}\land\braket{v_j}{v_k}=\delta_{j,k}$
+assume real_phases : $\forall j\in\{1,\ldots,2m+1\},\phi_j\in\mathbb{R}$
+
+oracle signal(anc : Qubit[a], q : Qubit[n])
+
+spec signal {
+  ensures $\operatorname{unitary}(\operatorname{signal})=U$
+}
+
+algorithm phase_zero(theta : Real, anc : Qubit[a], flag : Qubit) {
+  repeat j in 0..a {
+    X(anc[j])
+  }
+  controlled(anc) X(flag)
+  Rz($2\theta$, flag)
+  controlled(anc) X(flag)
+  repeat j in 0..a {
+    X(anc[j])
+  }
+}
+
+spec phase_zero {
+  requires $\ket{\Psi_0}=\ket{\psi}\otimes\ket{0}$
+  ensures $\ket{\Psi_1}=\exp(i\theta(2\ketbra{0^a}{0^a}-I))\ket{\psi}\otimes\ket{0}$
+  costs $G_{\mathrm{rotation}}=1\land G_{\mathrm{multicontrol}}=2$
+}
+
+algorithm odd(s : Real, anc : Qubit[a], q : Qubit[n], flag : Qubit) {
+  repeat j in 0..m {
+    call signal(anc, q)
+    call phase_zero($s\phi_{2(m-j)+1}$, anc, flag)
+    adjoint call signal(anc, q)
+    call phase_zero($s\phi_{2(m-j)}$, anc, flag)
+  }
+  call signal(anc, q)
+  call phase_zero($s\phi_1$, anc, flag)
+  assert $\Pi U_{2m+1,s}\Pi=P_{2m+1,s}^{(\mathrm{SV})}(A)$
+}
+
+spec odd {
+  requires $s\in\mathbb{R}\land\ket{\eta}=\ket{0}$
+  ensures $\Pi U_{2m+1,s}\Pi=\sum_{j=1}^{\operatorname{rank}(\Pi)}P_{2m+1,s}(\sigma_j)\ketbra{u_j}{v_j}$
+  ensures $P_{2m+1,s}(-x)=-P_{2m+1,s}(x)$
+  costs $Q_U=2m+1\land G_{\mathrm{rotation}}=2m+1$
+}
+
+algorithm even(s : Real, anc : Qubit[a], q : Qubit[n], flag : Qubit) {
+  repeat j in 0..m {
+    call signal(anc, q)
+    call phase_zero($s\phi_{2(m-j)}$, anc, flag)
+    adjoint call signal(anc, q)
+    call phase_zero($s\phi_{2(m-j)-1}$, anc, flag)
+  }
+  assert $\Pi U_{2m,s}\Pi=P_{2m,s}^{(\mathrm{SV})}(A)$
+}
+
+spec even {
+  requires $s\in\mathbb{R}\land\ket{\eta}=\ket{0}$
+  ensures $\Pi U_{2m,s}\Pi=\sum_{j=1}^{\operatorname{rank}(\Pi)}P_{2m,s}(\sigma_j)\ketbra{v_j}{v_j}$
+  ensures $P_{2m,s}(-x)=P_{2m,s}(x)$
+  costs $Q_U=2m\land G_{\mathrm{rotation}}=2m$
+}
+
+algorithm real_odd(branch : Qubit, anc : Qubit[a], q : Qubit[n], flag : Qubit) {
+  H(branch)
+  X(branch)
+  controlled(branch) call odd($1$, anc, q, flag)
+  X(branch)
+  controlled(branch) call odd($-1$, anc, q, flag)
+  H(branch)
+}
+
+spec real_odd {
+  requires $\ket{\eta}=\ket{0}\otimes\ket{0}$
+  requires $\forall x\in[-1,1],p(x)=\operatorname{Re}(P_{2m+1,1}(x))$
+  ensures $(\bra{0}\otimes\Pi)V(\ket{0}\otimes\Pi)=p^{(\mathrm{SV})}(A)$
+  costs $Q_{\mathrm{controlledU}}=2(2m+1)$
+}
+
+proof real_odd {
+  goal $p(-x)=-p(x)\land\forall x\in[-1,1],\abs{p(x)}\le1$
+  admit "Phases are supplied, not synthesized. The response is defined by the reflection-matrix convention, not an arbitrary bounded polynomial. The explicit two-branch implementation spends twice the signal queries of a fused construction."
+}

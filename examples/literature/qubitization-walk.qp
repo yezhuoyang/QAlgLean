@@ -1,0 +1,75 @@
+qparam HermitianQubitization
+title "Qubitization as a concrete walk"
+description "Low and Chuang, arXiv:1610.06546v3, Section 4, Lemma 8 and Eq. (16). The Hermitian self-inverse signal-oracle specialization allows S=I."
+
+parameter n : Nat
+parameter a : Nat
+parameter d : Nat
+assume dimensions : $n\ge1\land a\ge2$
+assume signal_unitary : $U^{\dagger}=U\land U^2=I$
+assume preparation_unitary : $G^{\dagger}G=I$
+state signal_state := $\ket{G}=G\ket{0^a}$
+state hamiltonian := $H=(\bra{G}\otimes I)U(\ket{G}\otimes I)$
+state reflection := $R_G=(2\ketbra{G}{G}-I)\otimes I$
+state walk := $W=R_G U$
+state chebyshev := $T_d(\cos(\theta))=\cos(d\theta)$
+
+oracle prepare(anc : Qubit[a])
+oracle signal(anc : Qubit[a], q : Qubit[n])
+
+spec prepare {
+  ensures $\operatorname{unitary}(\operatorname{prepare})=G$
+}
+
+spec signal {
+  ensures $\operatorname{unitary}(\operatorname{signal})=U$
+}
+
+algorithm reflect_G(anc : Qubit[a]) {
+  adjoint call prepare(anc)
+  repeat j in 0..a {
+    X(anc[j])
+  }
+  controlled(anc[0..a-1]) Z(anc[a-1])
+  repeat j in 0..a {
+    X(anc[j])
+  }
+  Rz($2\pi$, anc[0])
+  call prepare(anc)
+}
+
+spec reflect_G {
+  ensures $\operatorname{unitary}(\operatorname{reflectG})=2\ketbra{G}{G}-I$
+}
+
+algorithm walk(anc : Qubit[a], q : Qubit[n]) {
+  call signal(anc, q)
+  call reflect_G(anc)
+}
+
+spec walk {
+  requires $H\ket{\lambda}=\lambda\ket{\lambda}\land-1<\lambda<1$
+  ensures $W\ket{G}\ket{\lambda}=\lambda\ket{G}\ket{\lambda}+\sqrt{1-\lambda^2}\ket{G_{\lambda}^{\perp}}$
+  ensures $W\ket{G_{\lambda}^{\perp}}=-\sqrt{1-\lambda^2}\ket{G}\ket{\lambda}+\lambda\ket{G_{\lambda}^{\perp}}$
+  costs $Q_U=1\land Q_G=2$
+}
+
+algorithm chebyshev_transform(anc : Qubit[a], q : Qubit[n]) {
+  call prepare(anc)
+  repeat j in 0..d {
+    invariant $\ket{\Psi_j}=W^j(\ket{G}\otimes\ket{\psi})$
+    call walk(anc, q)
+  }
+  adjoint call prepare(anc)
+}
+
+spec chebyshev_transform {
+  requires $\ket{\Psi_0}=\ket{0^a}\otimes\ket{\psi}$
+  ensures $(\bra{0^a}\otimes I)V(\ket{0^a}\otimes I)=T_d(H)$
+  costs $Q_U=d\land Q_G=2d+2$
+}
+
+proof walk {
+  goal $\ket{G_{\lambda}^{\perp}}=\frac{\lambda\ket{G}\ket{\lambda}-U(\ket{G}\otimes\ket{\lambda})}{\sqrt{1-\lambda^2}}$
+  admit "Check the invariant two-dimensional subspace, including the one-dimensional endpoint cases lambda = +/-1. A general non-self-inverse signal oracle needs the additional construction in Lemma 10."
+}

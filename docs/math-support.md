@@ -32,6 +32,7 @@ Use `$` to open the notation palette, or `\` for completions within a mathematic
 | Accents | `\hat{H}`, `\widehat{f}`, `\bar{z}`, `\vec{x}`, `\dot{x}`, `\ddot{x}`, `\widetilde{\mathcal{O}}` |
 | Probability and trace | `\Pr_{x\sim D}[P(x)\mid E]`, `\Tr(\rho)`, `\det(A)`, `\dim(V)` |
 | Calculus | `\int_{0}^{t}H(s)\,\mathrm{d}s`, `\frac{\partial}{\partial t}`, `\nabla f`, `\lim_{n\to\infty}a_n` |
+| Postfix notation | `k!`, `k!!`, `f'(x)`, `z^{*}`, `L^{*}` |
 | Number theory | `a^r\equiv 1\pmod{N}`, `a\bmod N`, `\gcd(a,N)`, `\lfloor x\rfloor`, `\lceil x\rceil`, `\binom{n}{k}` |
 | Sets and logic | `\{0,1\}^{n}`, `\set{x\in S}{P(x)}`, `A\cup B`, `A\cap B`, `A\setminus B`, `x\notin S`, `\forall x\in S,P(x)`, `\exists x,P(x)` |
 | Relations | `\le`, `\ge`, `\ne`, `\approx`, `\equiv`, `\propto`, `\subseteq`, `\succeq`, `\implies`, `\iff`, `\mapsto` |
@@ -71,12 +72,16 @@ The regression suite parses and renders formulas for the following subjects, and
 | Hamiltonian simulation / block encodings | Hermitian operators, evolution, time integrals, tensor ancillas, operator-norm errors, asymptotic claims | [Hamiltonian and block encoding](../examples/hamiltonian-block-encoding.qp) |
 | Lattice algorithms / LWE | Gaussian weights, lattice cosets, modular vectors, conditional probabilities, explicit assumptions | [LWE obligations](../examples/lwe-obligations.qp) |
 
-The Shor, Hamiltonian, and LWE documents clearly identify abstract components or open obligations. In particular, the LWE document is a place to state and audit obligations. It is **not** an implementation or verification of Yilei Chen's algorithm, and the editor does not yet reproduce or detect its reported flaw.
+The [literature corpus](literature/README.md) includes full orchestration programs
+for these families, with source-specific external components and unproved
+assertions. Chen's actual nine stages and disputed Step 9 are now transcribed;
+no mathematical bug detection or verification is claimed.
 
 There is no claim that a finite frontend supports every notation used in every quantum paper. New domain names can use `\operatorname{...}` today. A genuinely new syntax constructor should be added to the shared registry, structural parser, renderer/export contract, and regression fixtures together. Arbitrary TeX macros are deliberately not treated as formal syntax.
 
 ## Parsing rules that preserve the displayed mathematics
 
+- Postfix factorial, double factorial, and prime are explicit nodes. A prime or star is notation awaiting mathematical interpretation; it is not automatically a derivative, conjugate, or dual. Use parentheses for iterated factorials.
 - Plain adjacent letters denote juxtaposition: `xy` is a product. Use `\operatorname{poly}(n)` for a named operator.
 - Use visible parentheses for mathematical grouping. Bare `{a+b}c` is rejected because TeX hides the braces; it would display as `a+bc` while suggesting a different syntax tree.
 - TeX scripts apply to one token. Write `x^{12}`, not `x^12`; QParam rejects the latter to prevent a display/tree disagreement.

@@ -1,4 +1,4 @@
-# QP 0.2: mathematical documents and parametric circuits
+# QP 0.3: mathematical documents and parametric programs
 
 A `.qp` file combines a parametric circuit with paper-style mathematics. Its
 mathematical regions use `$…$`; the VS Code mathematical editor renders those
@@ -45,10 +45,11 @@ or prove it.
 
 | Form | Purpose |
 |---|---|
-| `parameter n : Nat` | Document parameter; types are `Nat`, `Int`, `Real`, `Complex`, `Bool` |
+| `parameter n : Nat` | Document parameter; types are `Nat`, `Int`, `Real`, `Complex`, `Bool`, `Bit`, `Bit[n]`, `Math` |
 | `assume positive : $n>0$` | Explicit mathematical premise |
 | `state uniform := $...$` | Named mathematical expression, with no automatic state preparation |
 | `oracle U(q : Qubit[n])` | Opaque external circuit with an explicit signature |
+| `classical gcd(a : Nat, b : Nat) -> Nat` | Opaque classical subroutine with an explicit result type |
 | `algorithm prepare(q : Qubit[n]) { ... }` | Structured parametric circuit body |
 | `spec prepare { ... }` | Preconditions, postconditions, probability and cost obligations |
 | `proof prepare { ... }` | Goals, missing proofs and unresolved external references |
@@ -65,8 +66,9 @@ distinct statuses in the future kernel.
 
 ## Parametric circuit core
 
-The parser returns a structured circuit syntax tree: declarations, typed formal
+The parser returns a structured program syntax tree: declarations, typed formal
 parameters, gates, calls, control/adjoint modifiers, measurements, indexed loops,
+local bindings, conditionals, while loops, allocation, mathematical assertions,
 mathematical angle arguments and arithmetic register selectors. These are data
 structures for later elaboration and lowering, not executable semantics.
 
@@ -99,7 +101,7 @@ one containing measurement.
 
 Use `call name(...)` for reusable algorithms and opaque primitives. Forward
 references are allowed. The parser checks that the name exists and the argument
-count matches. Algorithms and oracles share a namespace; specifications and
+count matches. Algorithms, oracles and classical declarations share a namespace; specifications and
 proofs have separate namespaces. Built-in gates do not use `call`.
 
 Formal parameters can be quantum registers or scalars:
@@ -113,8 +115,8 @@ Actual arguments can be registers, elements, slices, arithmetic expressions or
 `$…$` mathematical expressions. A bare name is syntactically a register/name
 reference; whether it denotes a scalar or quantum value needs type resolution.
 Gate, measurement and control operands must name quantum parameters in the
-current signature; arithmetic names must be declared scalar parameters or active
-loop indices. These simple name checks catch typos. Call argument types, bounds,
+current signature or locally allocated registers; arithmetic names must be
+declared scalar parameters, local bindings or active loop indices. These simple name checks catch typos. Call argument types, bounds,
 disjointness and dimensions are not checked.
 
 `q[j]` selects an element; `q[lo..hi]` selects a half-open slice. Loop ranges are
@@ -134,10 +136,87 @@ repeat j in 0..n {
 measure q -> b
 ```
 
-Measurement introduces an authored result name, without probability semantics
-yet. Classical conditionals, recursion, allocation, return values, dependent
-typing and general classical algorithms remain future extensions. An opaque
-primitive is the visible implementation boundary today.
+Measurement introduces an immutable local result name, without probability
+semantics yet. The parser records this as `Bit`; register measurement width and
+dependent result typing remain work for an elaborator. An opaque primitive is
+a visible implementation boundary, never an automatically implemented algorithm.
+
+## Classical control and mathematical assertions
+
+Literature algorithms often interleave a circuit with sampling, arithmetic,
+postselection, and classical reconstruction. The program core records that
+control structure explicitly:
+
+```qp
+classical sample(N : Nat) -> Nat
+classical gcd(a : Nat, b : Nat) -> Nat
+
+algorithm try_factor(N : Nat) -> Nat {
+  var k : Nat := $0$
+  while $k < N$ {
+    invariant $0 \le k \le N$
+    let a : Nat := call sample(N)
+    let d : Nat := call gcd(a, N)
+    if $1 < d < N$ {
+      assert $d \mid N$
+      return $d$
+    } else {
+      set k := $k + 1$
+    }
+  }
+  return $1$
+}
+```
+
+This is a control-flow example, not a factoring algorithm or a checked contract
+for `sample` or `gcd`. A `classical` declaration supplies no implementation.
+Named mathematical operators, for example `\operatorname{gcd}(a,N)` in a
+formula, also have no evaluator. Explicit external calls make that boundary
+visible in the program tree. A value-producing call can target a `classical`
+declaration or an `algorithm` with an explicit result type. Name and argument
+count are checked, while input and result type agreement are not yet checked.
+
+`let` introduces an immutable local; `var` introduces a mutable local; `set`
+updates only a mutable local. Right-hand sides are a single `$…$` expression
+or `call name(...)`. Locals and measured results are scoped to their enclosing
+block. An active name cannot be shadowed. The two branches of an `if` have
+separate scopes; write the branch separator as `} else {` on one logical line.
+
+`assert $…$` and `invariant $…$` record mathematical obligations, not successful
+checks. An invariant must be inside a `repeat` or `while` block. `return $…$`
+requires an explicit algorithm result type; path coverage, termination, and
+agreement with that type are not checked. The parser does not resolve free
+names inside mathematics, so scope checks on circuit operands should not be
+mistaken for general mathematical name checking.
+
+Use single-letter mathematical locals in this release when their occurrences
+must be unambiguous: plain `xy` is a product, not a two-letter variable. Styled
+labels and explicit named operators retain their syntax, but mapping them to
+program bindings still requires the future mathematical name resolver.
+
+`Math` denotes an opaque mathematical object at this syntax stage. Use it for
+lattices, matrices, sets, distributions, and tuples whose dependent types have
+not been elaborated. `Bit[n]` describes a classical bit register. This preserves
+paper-level statements without pretending that arbitrary objects are qubits.
+
+```qp
+algorithm prepare_and_measure(n : Nat) -> Math {
+  allocate q : Qubit[n]
+  repeat j in 0..n {
+    H(q[j])
+  }
+  measure q -> y
+  discard q
+  return $y$
+}
+```
+
+`allocate` is intended to introduce fresh zero-initialized quantum storage;
+`reset(q)` resets retained storage; `discard q` releases/traces out storage.
+They are distinct syntax nodes. Allocation, ownership, initialization, linear
+usage after discard, and the physical costs of reset and discard are not yet
+given checked semantics. A compiler must establish those rules before execution
+or resource claims. These operations cannot carry gate modifiers syntactically.
 
 ## Grammar
 
@@ -150,17 +229,29 @@ spacing in document and specification forms.
 ```ebnf
 document    = "qparam" name newline { declaration newline } ;
 declaration = "title" string | "description" string
-            | "parameter" name ":" scalar-type
+            | "parameter" name ":" classical-type
             | "assume" name ":" math | "state" name ":=" math
-            | "oracle" signature | algorithm | spec | proof ;
+            | "oracle" signature | "classical" signature "->" classical-type
+            | algorithm | spec | proof ;
 signature   = name "(" [formal { "," formal }] ")" ;
-formal      = name ":" (scalar-type | "Qubit" [ "[" index "]" ]) ;
-scalar-type = "Nat" | "Int" | "Real" | "Complex" | "Bool" ;
-algorithm   = "algorithm" signature "{" newline { instruction newline } "}" ;
+formal      = name ":" value-type ;
+scalar-type = "Nat" | "Int" | "Real" | "Complex" | "Bool" | "Math" ;
+classical-type = scalar-type | "Bit" [ "[" index "]" ] ;
+value-type  = classical-type | "Qubit" [ "[" index "]" ] ;
+algorithm   = "algorithm" signature [ "->" value-type ] "{" newline { instruction newline } "}" ;
 instruction = { modifier } (gate | "call" name) "(" [actuals] ")"
             | "measure" register "->" name
+            | ("let" | "var") name ":" classical-type ":=" value
+            | "set" name ":=" value
+            | ("assert" | "invariant" | "return") math
+            | "allocate" name ":" "Qubit" [ "[" index "]" ]
+            | "discard" register
+            | "if" math "{" newline { instruction newline } "}"
+              [ "else" "{" newline { instruction newline } "}" ]
+            | "while" math "{" newline { instruction newline } "}"
             | "repeat" name "in" index ".." index "{" newline
               { instruction newline } "}" ;
+value       = math | "call" name "(" [actuals] ")" ;
 modifier    = "adjoint" | "controlled" "(" register { "," register } ")" ;
 actuals     = actual { "," actual } ;
 actual      = register | index | math ;

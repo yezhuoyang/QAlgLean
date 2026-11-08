@@ -12,7 +12,7 @@ http.createServer((req, res) => {
   if (url.pathname === '/favicon.ico') { res.writeHead(204); return res.end(); }
   if (url.pathname === '/' || url.pathname === '/editor') {
     const example = url.searchParams.get('example') || 'bell';
-    const requested = /^[a-z0-9-]+$/.test(example) ? `${example}.qp` : 'bell.qp';
+    const requested = /^(?:literature\/)?[a-z0-9-]+$/.test(example) ? `${example}.qp` : 'bell.qp';
     const file = fs.existsSync(path.join(root, 'examples', requested)) ? requested : 'bell.qp';
     const source = fs.readFileSync(path.join(root, 'examples', file), 'utf8');
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });

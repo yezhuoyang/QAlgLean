@@ -35,17 +35,17 @@
       }
     },
     {
-      "match": "\\b(oracle|algorithm|spec|proof)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "match": "\\b(oracle|classical|algorithm|spec|proof)\\s+([A-Za-z_][A-Za-z0-9_]*)",
       "captures": {
         "1": { "name": "keyword.declaration.qparam" },
         "2": { "name": "entity.name.function.qparam" }
       }
     },
     { "match": "\\b(admit|assume)\\b", "name": "keyword.control.assumption.qparam" },
-    { "match": "\\b(requires|ensures|costs|probability|goal)\\b", "name": "keyword.control.specification.qparam" },
-    { "match": "\\b(repeat|in|call|controlled|adjoint|measure|by|lean)\\b", "name": "keyword.control.qparam" },
+    { "match": "\\b(requires|ensures|costs|probability|goal|assert|invariant)\\b", "name": "keyword.control.specification.qparam" },
+    { "match": "\\b(repeat|in|call|controlled|adjoint|measure|by|lean|let|var|set|if|else|while|return|allocate|discard)\\b", "name": "keyword.control.qparam" },
     { "match": "\\b(title|description)\\b", "name": "keyword.other.metadata.qparam" },
-    { "match": "\\b(Nat|Int|Real|Complex|Bool|Qubit)\\b", "name": "support.type.qparam" },
+    { "match": "\\b(Nat|Int|Real|Complex|Bool|Bit|Math|Qubit)\\b", "name": "support.type.qparam" },
     { "match": "\\b(H|X|Y|Z|S|T|CX|CZ|SWAP|CCX|Rx|Ry|Rz|Phase|reset)\\b", "name": "support.function.quantum.qparam" },
     { "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*\\()", "name": "entity.name.function.call.qparam" },
     { "match": "\\b[0-9]+(?:\\.[0-9]+)?\\b", "name": "constant.numeric.qparam" },

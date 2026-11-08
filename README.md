@@ -86,14 +86,58 @@ adjoint operations, measurement, and explicitly declared external oracles. See t
 | [Deutsch–Jozsa](examples/deutsch-jozsa.qp), [Bernstein–Vazirani](examples/bernstein-vazirani.qp) | Query circuits with explicit oracle contracts |
 | [Grover](examples/grover.qp) | Parametric iterations, a gate-level diffuser, and a success-probability claim |
 | [QFT](examples/qft.qp) | Controlled phases, bit reversal, inverse via an adjoint call |
-| [Shor order finding](examples/shor-order-finding.qp) | Circuit skeleton; modular arithmetic and inverse QFT are explicit external components |
-| [Hamiltonian simulation / block encoding](examples/hamiltonian-block-encoding.qp) | Operator interfaces, matrix notation, approximation and resource obligations |
-| [LWE research obligations](examples/lwe-obligations.qp) | Modular/lattice/Gaussian notation and open obligations; no claimed reconstruction of Chen's algorithm |
+| [Semiclassical QFT](examples/literature/semiclassical-qft.qp), [phase estimation](examples/literature/quantum-phase-estimation.qp) | Measurement feedback, controlled powers, intermediate states and output distributions |
+| [QSearch](examples/literature/amplitude-search.qp), [amplitude estimation](examples/literature/amplitude-estimation.qp) | Randomized retries, controlled Grover iterate, probability and expected-query assertions |
+| [Shor factoring](examples/literature/shor-factoring.qp), [Regev factoring](examples/literature/regev-lattice-sampling.qp) | Quantum sampling and classical reductions, with explicit arithmetic/lattice interfaces |
+| [Product formulas](examples/literature/hamiltonian-product-formulas.qp), [Taylor LCU](examples/literature/lcu-taylor.qp) | Simulation schedules, unary preparation, controlled selection and oblivious amplification |
+| [Block product](examples/literature/lcu-block-product.qp), [block sum](examples/literature/lcu-block-sum.qp) | Composition programs and projected-operator error assertions |
+| [Qubitization](examples/literature/qubitization-walk.qp), [QSVT](examples/literature/qsvt-phase-sequence.qp) | Walk reflections, Chebyshev transforms, odd/even phase sequences and real-part wrapper |
+| [Chen's nine stages](examples/literature/chen-nine-stages.qp), [disputed Step 9](examples/literature/chen-step9-domain-extension.qp) | Source operations, complex Gaussian states, CRT processing and the disputed correlated-state claim |
 
 These examples exercise a defined, extensible mathematical grammar. They are **not
 complete implementations or verifications of every algorithm family**. The
 [coverage guide](docs/algorithm-coverage.md) identifies the implementation and proof
-gaps, including the limits of the Chen example.
+gaps. The [literature guide](docs/literature/README.md) maps programs to paper versions,
+equations, access models and omissions. **23 documents, 45 algorithm bodies, and
+539 mathematical spans** currently pass the syntax/render/export corpus check.
+
+For example, [amplitude estimation](examples/literature/amplitude-estimation.qp)
+exposes the controlled iterate and its error claim:
+
+$$
+\begin{aligned}
+\mathbf{let}\quad &Q=-AS_0A^\dagger S_\chi,\qquad M=2^m,\\[4pt]
+\mathbf{assert}\quad &|\Psi\rangle=\frac{1}{\sqrt M}
+  \sum_{x=0}^{M-1}|x\rangle\otimes Q^xA|0^n\rangle,\\[4pt]
+\mathbf{return}\quad &\widetilde a=\sin^2(\pi y/M),\\[4pt]
+\mathbf{probability}\quad &\Pr\!\left[
+ |\widetilde a-a|\le\frac{2\pi\sqrt{a(1-a)}}{M}+\frac{\pi^2}{M^2}
+ \right]\ge\frac8{\pi^2}.
+\end{aligned}
+$$
+
+These are authored obligations, including the probability bound from
+[BHMT, Theorem 12](https://arxiv.org/pdf/quant-ph/0005055v1). The program contains
+the controlled operations and their essential phase sign. Classical variables,
+conditionals, loops, allocation and inline assertions are part of the language:
+
+```qp
+let r : Nat := $D_j$
+let u : Nat := call powmod(a, r, N)
+if $u=1\land r\bmod 2=0$ {
+  let x : Nat := call powmod(a, r/2, N)
+  let d : Nat := call gcd($x-1$, N)
+  if $1<d<N$ {
+    assert $d\mid N$
+    return $d$
+  }
+}
+```
+
+This fragment comes from the bounded Shor reduction. `powmod` and `gcd` have
+explicit classical interfaces; their implementations and the assertions are
+not checked by this frontend. The Chen program likewise records the withdrawn
+paper's disputed Step 9 as an open obligation, not a detected or repaired proof.
 
 ## Try it in VS Code
 
@@ -104,7 +148,7 @@ git clone https://github.com/yezhuoyang/QAlgLean.git
 cd QAlgLean
 npm ci
 npm run package
-code --install-extension artifacts/qparam-studio-0.2.0.vsix
+code --install-extension artifacts/qparam-studio-0.3.0.vsix
 code examples/qft.qp
 ```
 
@@ -135,6 +179,7 @@ reference. See [architecture and trust boundary](docs/architecture.md).
 
 ```sh
 npm test                # Parser, mathematical coverage, rendering, editing protocol
+npm run check:literature # All examples, source manifest, mathematical export
 npm run test:extension  # Real VS Code: opening .qp, saving, undo/redo, source view
 npm run package         # Installable VSIX with bundled math fonts and editor
 npm run preview         # /editor?example=qft for editor QA; / for reading view

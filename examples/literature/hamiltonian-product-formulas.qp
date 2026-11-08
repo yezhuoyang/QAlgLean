@@ -1,0 +1,64 @@
+qparam ProductFormulaSimulation
+title "Hamiltonian simulation: first and second order"
+description "Two-term Lie-Trotter and symmetric Suzuki circuits. Source: Childs et al., arXiv:1912.08854v3, Section 5.1, Proposition 15 and Eq. (150). Repetition bounds are derived by telescoping; term exponentials are the access model."
+
+parameter n : Nat
+parameter r : Nat
+parameter t : Real
+assume dimensions : $n\ge 1\land r\ge 1\land t\ge 0$
+assume hermitian : $A=A^{\dagger}\land B=B^{\dagger}$
+state hamiltonian := $H=A+B$
+state first_order_step := $S_1(\tau)=\exp(-i\tau B)\exp(-i\tau A)$
+state second_order_step := $S_2(\tau)=\exp(-i\tau A/2)\exp(-i\tau B)\exp(-i\tau A/2)$
+state commutator := $[A,B]=AB-BA$
+
+oracle evolve_A(tau : Real, q : Qubit[n])
+oracle evolve_B(tau : Real, q : Qubit[n])
+
+spec evolve_A {
+  requires $\norm{\ket{\psi}}=1$
+  ensures $\ket{\psi'}=\exp(-i\tau A)\ket{\psi}$
+}
+
+spec evolve_B {
+  requires $\norm{\ket{\psi}}=1$
+  ensures $\ket{\psi'}=\exp(-i\tau B)\ket{\psi}$
+}
+
+algorithm first_order(q : Qubit[n]) {
+  repeat j in 0..r {
+    invariant $\ket{\psi_j}=S_1(t/r)^j\ket{\psi_0}$
+    call evolve_A($t/r$, q)
+    call evolve_B($t/r$, q)
+    assert $\ket{\psi_{j+1}}=S_1(t/r)\ket{\psi_j}$
+  }
+}
+
+spec first_order {
+  requires $\norm{\ket{\psi_0}}=1$
+  ensures $\ket{\psi_r}=S_1(t/r)^r\ket{\psi_0}$
+  ensures $\norm{S_1(t/r)^r-\exp(-itH)}\le\frac{t^2}{2r}\norm{[A,B]}$
+  costs $Q_A=r\land Q_B=r$
+}
+
+algorithm second_order(q : Qubit[n]) {
+  repeat j in 0..r {
+    invariant $\ket{\psi_j}=S_2(t/r)^j\ket{\psi_0}$
+    call evolve_A($t/(2r)$, q)
+    call evolve_B($t/r$, q)
+    call evolve_A($t/(2r)$, q)
+    assert $\ket{\psi_{j+1}}=S_2(t/r)\ket{\psi_j}$
+  }
+}
+
+spec second_order {
+  requires $\norm{\ket{\psi_0}}=1$
+  ensures $\ket{\psi_r}=S_2(t/r)^r\ket{\psi_0}$
+  ensures $\norm{S_2(t/r)^r-\exp(-itH)}\le\frac{t^3}{12r^2}\norm{[B,[B,A]]}+\frac{t^3}{24r^2}\norm{[A,[A,B]]}$
+  costs $Q_A=2r\land Q_B=r$
+}
+
+proof second_order {
+  goal $\norm{S_2(t/r)^r-\exp(-itH)}\le r\norm{S_2(t/r)-\exp(-itH/r)}$
+  admit "Apply the unitary telescoping bound and Eq. (150); query costs count exact term exponentials, not their gate synthesis."
+}
